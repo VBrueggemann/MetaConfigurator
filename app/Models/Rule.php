@@ -20,13 +20,10 @@ class Rule extends Model
         'order',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'component' => RuleComponent::class,
-            'meta' => 'array',
-        ];
-    }
+    protected $casts = [
+        'component' => RuleComponent::class,
+        'meta' => 'array',
+    ];
 
     public function view(): BelongsTo
     {
