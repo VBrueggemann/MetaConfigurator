@@ -3,6 +3,7 @@
 namespace App\Actions\Rules;
 
 use App\Models\Rule;
+use Throwable;
 
 final class EvaluateRule
 {
@@ -10,8 +11,17 @@ final class EvaluateRule
         private readonly EvaluateExpression $evaluateExpression,
     ) {}
 
+    /**
+     * Evaluates a Rule's expression, defaulting to `false` if it references
+     * a field the context doesn't have (e.g. an unanswered View) rather than
+     * throwing — an unanswered field simply doesn't satisfy the rule.
+     */
     public function __invoke(Rule $rule, array $context): bool
     {
-        return (bool) ($this->evaluateExpression)($rule->expression, $context);
+        try {
+            return (bool) ($this->evaluateExpression)($rule->expression, $context);
+        } catch (Throwable) {
+            return false;
+        }
     }
 }
