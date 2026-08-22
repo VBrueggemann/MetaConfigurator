@@ -9,12 +9,8 @@ The top-level definition of one guided flow — a tree of Views, plus the Rules 
 _Avoid_: Survey, wizard, form (these are what a Configurator produces an *experience* of, not the definition itself)
 
 **View**:
-Any node in a Configurator's tree — a step/page (what used to be a "Group"), a question within a step (what used to be a "GroupItem"), or a choice offered by a question (what used to be an "Option"). A View's `type` says which of these it is; type-specific detail (a question's answer-type — single-select, multi-select, or text — and any validation limits) lives in that View's config, not in separate models. Views nest via a parent View, so the whole Configurator is one tree.
-_Avoid_: Group, GroupItem, Option, ListItem, node, component (these terms described the pre-unification model or are used for other things — see Rule's "component" below)
-
-**Content**:
-A static, non-logic block attached to a View — used for things like intro or closing screens.
-_Avoid_: Text block, copy
+Any node in a Configurator's tree. Four types for v1: `group` (a step/page, what used to be "Group"), `select` (a question offering choices — its config says whether multiple are allowed, and carries its options as value/label pairs; there is no separate Option model), `text_input` (a free-text question), and `html` (a static display block — what used to be "Content" — used for things like intro or closing screens). Everything type-specific — a question's label, its validation limits, an html View's content — lives in that View's config. Views nest via a parent View, so the whole Configurator is one tree.
+_Avoid_: Group, GroupItem, Option, ListItem, Content, node, component (these terms described the pre-unification model or are used for other things — see Rule's "component" below)
 
 **Configuration**:
 One respondent's run through a Configurator — the accumulating record of what they've answered.
