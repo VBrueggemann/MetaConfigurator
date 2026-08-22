@@ -1,0 +1,79 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\Configurator;
+use App\Models\Rule;
+use App\Models\View;
+use Illuminate\Database\Seeder;
+
+class FictionalSurveySeeder extends Seeder
+{
+    /**
+     * Seeds one fictional "Dinner Party" survey exercising every v1 View
+     * type, a Visibility rule, compound Validation rules (required,
+     * min/max selections, min/max length), and a NextGroup branch.
+     */
+    public function run(): void
+    {
+        $configurator = Configurator::factory()->create(['name' => 'Dinner Party Survey']);
+
+        $aboutYou = View::factory()->group()->create(['configurator_id' => $configurator->id, 'order' => 0]);
+        $general = View::factory()->group()->create(['configurator_id' => $configurator->id, 'order' => 1]);
+        $veganExtras = View::factory()->group()->create(['configurator_id' => $configurator->id, 'order' => 2]);
+        $thankYou = View::factory()->group()->create(['configurator_id' => $configurator->id, 'order' => 3]);
+
+        $name = View::factory()->textInput()->childOf($aboutYou)->create(['order' => 0]);
+        $diet = View::factory()->select([
+            ['value' => 'omnivore', 'label' => 'Omnivore'],
+            ['value' => 'vegetarian', 'label' => 'Vegetarian'],
+            ['value' => 'vegan', 'label' => 'Vegan'],
+        ])->childOf($aboutYou)->create(['order' => 1]);
+        $activities = View::factory()->select([
+            ['value' => 'hiking', 'label' => 'Hiking'],
+            ['value' => 'board_games', 'label' => 'Board games'],
+            ['value' => 'karaoke', 'label' => 'Karaoke'],
+            ['value' => 'cooking', 'label' => 'Cooking'],
+        ], multiple: true)->childOf($aboutYou)->create(['order' => 2]);
+        $allergy = View::factory()->textInput()->childOf($aboutYou)->create(['order' => 3]);
+
+        View::factory()->html('Thanks! We\'ll use your preferences to plan the party.')
+            ->childOf($general)->create(['order' => 0]);
+        View::factory()->html('As a vegan, you\'ll get a specially curated menu!')
+            ->childOf($veganExtras)->create(['order' => 0]);
+        View::factory()->html('Thank you for completing the survey!')
+            ->childOf($thankYou)->create(['order' => 0]);
+
+        // Visibility: the allergy question only appears for vegan respondents.
+        Rule::factory()->visibility("answers['{$diet->id}'] == 'vegan'")
+            ->create(['view_id' => $allergy->id]);
+
+        // Validation.
+        Rule::factory()->validation("answers['{$name->id}'] != null && strlen(answers['{$name->id}']) > 0")
+            ->create(['view_id' => $name->id, 'meta' => ['message' => 'Please tell us your name.']]);
+        Rule::factory()->validation("answers['{$name->id}'] == null || strlen(answers['{$name->id}']) <= 50")
+            ->create(['view_id' => $name->id, 'meta' => ['message' => 'Name must be 50 characters or fewer.']]);
+
+        Rule::factory()->validation("answers['{$diet->id}'] != null")
+            ->create(['view_id' => $diet->id, 'meta' => ['message' => 'Please choose a diet.']]);
+
+        Rule::factory()->validation("answers['{$activities->id}'] != null && count(answers['{$activities->id}']) >= 1")
+            ->create(['view_id' => $activities->id, 'meta' => ['message' => 'Choose at least one activity.']]);
+        Rule::factory()->validation("answers['{$activities->id}'] == null || count(answers['{$activities->id}']) <= 3")
+            ->create(['view_id' => $activities->id, 'meta' => ['message' => 'Choose at most three activities.']]);
+
+        // Only reachable while visible (diet == vegan), so no need to guard on diet here too.
+        Rule::factory()->validation("answers['{$allergy->id}'] != null && strlen(answers['{$allergy->id}']) > 0")
+            ->create(['view_id' => $allergy->id, 'meta' => ['message' => 'Please tell us about your allergy.']]);
+
+        // Flow: vegans branch to Vegan Extras; everyone else takes the sequential path to General.
+        Rule::factory()->nextGroup("answers['{$diet->id}'] == 'vegan'", $veganExtras->id)
+            ->create(['view_id' => $aboutYou->id]);
+
+        // General is sequentially next after About You, but must skip past Vegan Extras to Thank You.
+        Rule::factory()->nextGroup('true', $thankYou->id)
+            ->create(['view_id' => $general->id]);
+
+        // Vegan Extras falls through sequentially to Thank You — no rule needed.
+    }
+}
