@@ -19,6 +19,15 @@ it('evaluates an expression against a given context', function () {
     expect($evaluate('age >= 18', ['age' => 12]))->toBeFalse();
 });
 
+it('supports strlen() and count() as custom functions', function () {
+    $evaluate = app(EvaluateExpression::class);
+
+    expect($evaluate('strlen(value) >= 3', ['value' => 'hi']))->toBeFalse();
+    expect($evaluate('strlen(value) >= 3', ['value' => 'hello']))->toBeTrue();
+    expect($evaluate('count(value) <= 2', ['value' => ['a', 'b']]))->toBeTrue();
+    expect($evaluate('count(value) <= 2', ['value' => ['a', 'b', 'c']]))->toBeFalse();
+});
+
 it('supports compound logic with && and ||', function () {
     $evaluate = app(EvaluateExpression::class);
 
