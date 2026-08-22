@@ -21,32 +21,36 @@ final class BuildAnswerContext
     }
 
     /**
-     * Populates $answers with this view's own entry (a scalar for a leaf,
-     * or a nested map of its children for a group), and recurses into
-     * children first so a group's nested map can be built from them.
+     * Populates $answers with this view's own entry, then recurses into
+     * children so their entries are populated too. A direct Answer against
+     * this view's own id (e.g. a group acknowledged via Answer::updateOrCreate)
+     * always takes precedence over the nested map of its children's entries —
+     * a container view isn't only ever "the sum of its children".
      */
     private function walk(View $view, Collection $answersByViewId, array &$answers): void
     {
         $children = View::query()->where('parent_id', $view->id)->orderBy('order')->get();
 
+        foreach ($children as $child) {
+            $this->walk($child, $answersByViewId, $answers);
+        }
+
+        if ($answersByViewId->has($view->id)) {
+            $answers[$view->id] = $answersByViewId->get($view->id);
+
+            return;
+        }
+
         if ($children->isNotEmpty()) {
             $nested = [];
 
             foreach ($children as $child) {
-                $this->walk($child, $answersByViewId, $answers);
-
                 if (array_key_exists($child->id, $answers)) {
                     $nested[$child->id] = $answers[$child->id];
                 }
             }
 
             $answers[$view->id] = $nested;
-
-            return;
-        }
-
-        if ($answersByViewId->has($view->id)) {
-            $answers[$view->id] = $answersByViewId->get($view->id);
         }
     }
 }

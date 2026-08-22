@@ -16,7 +16,9 @@ final class ApplyValidation
     {
         $errors = [];
 
-        foreach ($evaluation->componentContexts[RuleComponent::Visibility->value] ?? [] as $viewId) {
+        $viewIds = [$evaluation->group->id, ...($evaluation->componentContexts[RuleComponent::Visibility->value] ?? [])];
+
+        foreach ($viewIds as $viewId) {
             $rules = Rule::query()
                 ->where('view_id', $viewId)
                 ->where('component', RuleComponent::Validation)

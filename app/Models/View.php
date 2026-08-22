@@ -21,13 +21,10 @@ class View extends Model
         'config',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'type' => ViewType::class,
-            'config' => 'array',
-        ];
-    }
+    protected $casts = [
+        'type' => ViewType::class,
+        'config' => 'array',
+    ];
 
     public function configurator(): BelongsTo
     {

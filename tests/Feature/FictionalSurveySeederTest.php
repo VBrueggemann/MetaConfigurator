@@ -1,7 +1,6 @@
 <?php
 
 use App\Actions\Rules\EvaluateGroup;
-use App\Models\Answer;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\View;
@@ -25,15 +24,6 @@ beforeEach(function () {
     $this->activities = $items[2];
     $this->allergy = $items[3];
 });
-
-function answer($configuration, $view, $value)
-{
-    Answer::factory()->create([
-        'configuration_id' => $configuration->id,
-        'view_id' => $view->id,
-        'value' => $value,
-    ]);
-}
 
 it('hides the allergy question and routes to General for a non-vegan respondent', function () {
     answer($this->configuration, $this->name, 'Ada');
@@ -91,13 +81,21 @@ it('rejects a name over 50 characters', function () {
     expect($evaluation->componentContexts['validation'])->toHaveKey($this->name->id);
 });
 
-it('routes General to Thank You, skipping Vegan Extras', function () {
+it('keeps a content-only group current until it is acknowledged, then routes it onward', function () {
     $evaluation = app(EvaluateGroup::class)($this->general, $this->configuration);
+    expect($evaluation->componentContexts['validation'])->toHaveKey($this->general->id);
+    expect($evaluation->componentContexts['next_group'])->toBeNull();
 
+    answer($this->configuration, $this->general, true);
+
+    $evaluation = app(EvaluateGroup::class)($this->general, $this->configuration);
+    expect($evaluation->componentContexts['validation'])->toBe([]);
     expect($evaluation->componentContexts['next_group'])->toBe($this->thankYou->id);
 });
 
-it('routes Vegan Extras to Thank You sequentially', function () {
+it('routes Vegan Extras to Thank You sequentially, once acknowledged', function () {
+    answer($this->configuration, $this->veganExtras, true);
+
     $evaluation = app(EvaluateGroup::class)($this->veganExtras, $this->configuration);
 
     expect($evaluation->componentContexts['next_group'])->toBe($this->thankYou->id);

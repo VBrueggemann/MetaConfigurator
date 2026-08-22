@@ -33,19 +33,19 @@ class ViewFactory extends Factory
         return $this->state(fn () => ['type' => ViewType::Group]);
     }
 
-    public function select(array $options, bool $multiple = false): static
+    public function select(array $options, bool $multiple = false, ?string $label = null): static
     {
         return $this->state(fn () => [
             'type' => ViewType::Select,
-            'config' => ['label' => fake()->sentence(), 'multiple' => $multiple, 'options' => $options],
+            'config' => ['label' => $label ?? fake()->sentence(), 'multiple' => $multiple, 'options' => $options],
         ]);
     }
 
-    public function textInput(): static
+    public function textInput(?string $label = null): static
     {
         return $this->state(fn () => [
             'type' => ViewType::TextInput,
-            'config' => ['label' => fake()->sentence()],
+            'config' => ['label' => $label ?? fake()->sentence()],
         ]);
     }
 

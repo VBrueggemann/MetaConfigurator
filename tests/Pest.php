@@ -1,5 +1,8 @@
 <?php
 
+use App\Models\Answer;
+use App\Models\Configuration;
+use App\Models\View;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -44,7 +47,11 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+function answer(Configuration $configuration, View $view, mixed $value): Answer
 {
-    // ..
+    return Answer::factory()->create([
+        'configuration_id' => $configuration->id,
+        'view_id' => $view->id,
+        'value' => $value,
+    ]);
 }

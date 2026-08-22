@@ -23,19 +23,19 @@ class FictionalSurveySeeder extends Seeder
         $veganExtras = View::factory()->group()->create(['configurator_id' => $configurator->id, 'order' => 2]);
         $thankYou = View::factory()->group()->create(['configurator_id' => $configurator->id, 'order' => 3]);
 
-        $name = View::factory()->textInput()->childOf($aboutYou)->create(['order' => 0]);
+        $name = View::factory()->textInput(label: 'What is your name?')->childOf($aboutYou)->create(['order' => 0]);
         $diet = View::factory()->select([
             ['value' => 'omnivore', 'label' => 'Omnivore'],
             ['value' => 'vegetarian', 'label' => 'Vegetarian'],
             ['value' => 'vegan', 'label' => 'Vegan'],
-        ])->childOf($aboutYou)->create(['order' => 1]);
+        ], label: 'What is your diet?')->childOf($aboutYou)->create(['order' => 1]);
         $activities = View::factory()->select([
             ['value' => 'hiking', 'label' => 'Hiking'],
             ['value' => 'board_games', 'label' => 'Board games'],
             ['value' => 'karaoke', 'label' => 'Karaoke'],
             ['value' => 'cooking', 'label' => 'Cooking'],
-        ], multiple: true)->childOf($aboutYou)->create(['order' => 2]);
-        $allergy = View::factory()->textInput()->childOf($aboutYou)->create(['order' => 3]);
+        ], multiple: true, label: 'Which activities are you interested in? (1-3)')->childOf($aboutYou)->create(['order' => 2]);
+        $allergy = View::factory()->textInput(label: 'Please describe your allergy')->childOf($aboutYou)->create(['order' => 3]);
 
         View::factory()->html('Thanks! We\'ll use your preferences to plan the party.')
             ->childOf($general)->create(['order' => 0]);
@@ -65,6 +65,15 @@ class FictionalSurveySeeder extends Seeder
         // Only reachable while visible (diet == vegan), so no need to guard on diet here too.
         Rule::factory()->validation("answers['{$allergy->id}'] != null && strlen(answers['{$allergy->id}']) > 0")
             ->create(['view_id' => $allergy->id, 'meta' => ['message' => 'Please tell us about your allergy.']]);
+
+        // Content-only groups have nothing to validate, so without an explicit
+        // "acknowledged" marker the walk-forward algorithm would skip straight
+        // past them. Clicking Next writes answers[group.id] = true; until then,
+        // this rule keeps the respondent here (see docs/adr and .ai/rules).
+        Rule::factory()->validation("answers['{$general->id}'] != null")
+            ->create(['view_id' => $general->id, 'meta' => ['message' => 'Please continue.']]);
+        Rule::factory()->validation("answers['{$veganExtras->id}'] != null")
+            ->create(['view_id' => $veganExtras->id, 'meta' => ['message' => 'Please continue.']]);
 
         // Flow: vegans branch to Vegan Extras; everyone else takes the sequential path to General.
         Rule::factory()->nextGroup("answers['{$diet->id}'] == 'vegan'", $veganExtras->id)

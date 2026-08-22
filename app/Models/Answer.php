@@ -17,12 +17,9 @@ class Answer extends Model
         'value',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'value' => 'array',
-        ];
-    }
+    protected $casts = [
+        'value' => 'array',
+    ];
 
     public function configuration(): BelongsTo
     {
