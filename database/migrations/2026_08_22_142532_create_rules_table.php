@@ -19,6 +19,8 @@ return new class extends Migration
             $table->json('meta')->nullable();
             $table->unsignedInteger('order')->default(0);
             $table->timestamps();
+
+            $table->index('view_id');
         });
     }
 

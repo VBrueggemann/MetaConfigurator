@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('views', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->foreignUuid('configurator_id')->constrained()->cascadeOnDelete();
-            $table->uuid('parent_id')->nullable();
+            $table->uuid('parent_id')->nullable()->index();
             $table->string('type');
             $table->unsignedInteger('order')->default(0);
             $table->json('config')->nullable();
@@ -23,6 +23,7 @@ return new class extends Migration
 
         Schema::table('views', function (Blueprint $table) {
             $table->foreign('parent_id')->references('id')->on('views')->cascadeOnDelete();
+            $table->index('configurator_id');
         });
     }
 

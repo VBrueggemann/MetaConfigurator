@@ -19,6 +19,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['configuration_id', 'view_id']);
+            $table->index('view_id');
         });
     }
 
