@@ -8,10 +8,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Staudenmeir\LaravelAdjacencyList\Eloquent\HasRecursiveRelationships;
 
 class View extends Model
 {
-    use HasFactory, HasUuids;
+    use HasFactory, HasRecursiveRelationships, HasUuids;
 
     protected $fillable = [
         'configurator_id',
