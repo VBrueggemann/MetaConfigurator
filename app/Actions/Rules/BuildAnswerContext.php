@@ -29,7 +29,7 @@ final class BuildAnswerContext
 
         $scopedViews = $configuration->configurator->rootView === null
             ? collect()
-            : $this->scopedViews($configuration)->get();
+            : $this->scopedViews($configuration)->with(['rules'])->depthFirst()->get();
 
         $evaluation->context['views'] = $scopedViews->pluck('id');
 

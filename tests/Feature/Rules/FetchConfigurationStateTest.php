@@ -45,9 +45,9 @@ it('shows a view once its visibility rule fires', function () {
 
 it('hides a whole branch when its ancestor is hidden', function () {
     $configurator = Configurator::factory()->create();
-    $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
-    $diet = View::factory()->textInput()->childOf($group)->create();
-    $veganExtras = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $diet = View::factory()->textInput()->childOf($root)->create();
+    $veganExtras = View::factory()->group()->childOf($root)->create();
     $content = View::factory()->html('curated menu')->childOf($veganExtras)->create();
 
     Rule::factory()->visibility("answers['{$diet->id}'] == 'vegan'")->create(['view_id' => $veganExtras->id]);
