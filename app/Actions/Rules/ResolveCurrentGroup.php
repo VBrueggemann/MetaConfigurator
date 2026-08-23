@@ -13,12 +13,6 @@ final class ResolveCurrentGroup
         private readonly EvaluateGroup $evaluateGroup,
     ) {}
 
-    /**
-     * Walks forward from the Configurator's first group, following
-     * next-group resolution, until it reaches a group with validation
-     * errors (that's where the respondent currently is) or a terminal
-     * group (no next group — the Configuration is complete).
-     */
     public function __invoke(Configuration $configuration): View
     {
         $group = View::query()

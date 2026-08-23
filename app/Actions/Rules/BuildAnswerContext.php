@@ -20,13 +20,6 @@ final class BuildAnswerContext
         return ['answers' => $answers];
     }
 
-    /**
-     * Populates $answers with this view's own entry, then recurses into
-     * children so their entries are populated too. A direct Answer against
-     * this view's own id (e.g. a group acknowledged via Answer::updateOrCreate)
-     * always takes precedence over the nested map of its children's entries —
-     * a container view isn't only ever "the sum of its children".
-     */
     private function walk(View $view, Collection $answersByViewId, array &$answers): void
     {
         $children = View::query()->where('parent_id', $view->id)->orderBy('order')->get();
