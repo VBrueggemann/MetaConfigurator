@@ -8,16 +8,23 @@ use Illuminate\Support\Collection;
 
 final class BuildAnswerContext
 {
-    public function __invoke(Configuration $configuration): array
+    /**
+     * @param  array<string, mixed>  $pendingAnswers
+     */
+    public function __invoke(Configuration $configuration, array $pendingAnswers = []): array
     {
-        $answersByViewId = $configuration->answers()->get()->pluck('value', 'view_id');
+        $persistedAnswersByViewId = $configuration->answers()->get()->pluck('value', 'view_id');
+        $answersByViewId = $persistedAnswersByViewId->merge($pendingAnswers);
 
         $answers = [];
         foreach (View::query()->where('configurator_id', $configuration->configurator_id)->whereNull('parent_id')->orderBy('order')->get() as $group) {
             $this->walk($group, $answersByViewId, $answers);
         }
 
-        return ['answers' => $answers];
+        return [
+            'answers' => $answers,
+            'answeredViewIds' => $persistedAnswersByViewId->keys()->all(),
+        ];
     }
 
     private function walk(View $view, Collection $answersByViewId, array &$answers): void

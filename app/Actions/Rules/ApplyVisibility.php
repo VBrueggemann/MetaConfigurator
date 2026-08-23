@@ -2,6 +2,8 @@
 
 namespace App\Actions\Rules;
 
+use App\Actions\DTO\ConfigurationEvaluation;
+use App\Enums\ComponentType;
 use App\Enums\RuleComponent;
 use App\Models\Rule;
 use App\Models\View;
@@ -13,27 +15,33 @@ final class ApplyVisibility
         private readonly EvaluateRule $evaluateRule,
     ) {}
 
-    public function __invoke(GroupEvaluation $evaluation, Closure $next): mixed
+    public function __invoke(ConfigurationEvaluation $evaluation, Closure $next): mixed
     {
-        $children = View::query()->where('parent_id', $evaluation->group->id)->orderBy('order')->get();
+        $views = View::query()
+            ->where('configurator_id', $evaluation->configuration->configurator_id)
+            ->tree()
+            ->depthFirst()
+            ->get();
 
-        $visible = [];
+        $rulesByViewId = Rule::query()
+            ->whereIn('view_id', $views->pluck('id'))
+            ->where('component', RuleComponent::Visibility)
+            ->orderBy('order')
+            ->get()
+            ->groupBy('view_id');
 
-        foreach ($children as $child) {
-            $rules = Rule::query()
-                ->where('view_id', $child->id)
-                ->where('component', RuleComponent::Visibility)
-                ->orderBy('order')
-                ->get();
+        $visibility = [];
 
-            $isVisible = $rules->every(fn (Rule $rule) => ($this->evaluateRule)($rule, $evaluation->context));
+        foreach ($views as $view) {
+            $rules = $rulesByViewId->get($view->id, collect());
 
-            if ($isVisible) {
-                $visible[] = $child->id;
-            }
+            $ownRuleVisible = $rules->every(fn (Rule $rule) => ($this->evaluateRule)($rule, $evaluation->context));
+            $parentVisible = $view->parent_id === null || ($visibility[$view->parent_id] ?? false);
+
+            $visibility[$view->id] = $ownRuleVisible && $parentVisible;
         }
 
-        $evaluation->componentContexts[RuleComponent::Visibility->value] = $visible;
+        $evaluation->componentContexts[ComponentType::Visibility->value] = $visibility;
 
         return $next($evaluation);
     }

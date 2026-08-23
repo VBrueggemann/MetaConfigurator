@@ -36,13 +36,4 @@ class RuleFactory extends Factory
     {
         return $this->state(fn () => ['component' => RuleComponent::Validation, 'expression' => $expression]);
     }
-
-    public function nextGroup(string $expression, string $nextViewId): static
-    {
-        return $this->state(fn () => [
-            'component' => RuleComponent::NextGroup,
-            'expression' => $expression,
-            'meta' => ['next_view_id' => $nextViewId],
-        ]);
-    }
 }

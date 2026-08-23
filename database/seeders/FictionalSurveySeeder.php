@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Component;
 use App\Models\Configurator;
 use App\Models\Rule;
 use App\Models\View;
@@ -63,10 +64,12 @@ class FictionalSurveySeeder extends Seeder
         Rule::factory()->validation("answers['{$veganExtras->id}'] != null")
             ->create(['view_id' => $veganExtras->id, 'meta' => ['message' => 'Please continue.']]);
 
-        Rule::factory()->nextGroup("answers['{$diet->id}'] == 'vegan'", $veganExtras->id)
-            ->create(['view_id' => $aboutYou->id]);
-
-        Rule::factory()->nextGroup('true', $thankYou->id)
+        Rule::factory()->visibility("answers['{$diet->id}'] != 'vegan'")
             ->create(['view_id' => $general->id]);
+        Rule::factory()->visibility("answers['{$diet->id}'] == 'vegan'")
+            ->create(['view_id' => $veganExtras->id]);
+
+        Component::factory()->scope('just_next', depth: 0)
+            ->create(['configurator_id' => $configurator->id]);
     }
 }

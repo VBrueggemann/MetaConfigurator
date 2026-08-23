@@ -3,9 +3,9 @@
 namespace App\Livewire;
 
 use App\Actions\GetCurrentConfiguration;
-use App\Actions\Rules\EvaluateGroup;
-use App\Actions\Rules\ResolveCurrentGroup;
-use App\Models\Answer;
+use App\Actions\Rules\CommitConfigurationAnswers;
+use App\Actions\Rules\FetchConfigurationState;
+use App\Enums\ViewType;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\View as ViewModel;
@@ -18,53 +18,56 @@ class PlayConfigurator extends Component
 
     public Configuration $configuration;
 
-    public ViewModel $currentGroup;
-
     /** @var array<string, mixed> */
     public array $values = [];
 
     /** @var list<string> */
     public array $visibleViewIds = [];
 
+    /** @var list<string> */
+    public array $scopeViewIds = [];
+
     /** @var array<string, list<string>> */
     public array $fieldErrors = [];
 
-    public ?string $nextGroupId = null;
-
-    public function mount(Configurator $configurator, GetCurrentConfiguration $getCurrentConfiguration, ResolveCurrentGroup $resolveCurrentGroup): void
+    public function mount(Configurator $configurator, GetCurrentConfiguration $getCurrentConfiguration): void
     {
         $this->configurator = $configurator;
         $this->configuration = $getCurrentConfiguration($configurator);
-        $this->currentGroup = $resolveCurrentGroup($this->configuration);
 
-        $this->loadCurrentGroup();
+        $this->fetch();
+        $this->loadValues();
     }
 
-    public function updatedValues(mixed $value, string $key): void
+    public function updatedValues(): void
     {
-        Answer::updateOrCreate(
-            ['configuration_id' => $this->configuration->id, 'view_id' => $key],
-            ['value' => $value],
-        );
-
-        $this->evaluate();
+        $this->fetch();
+        $this->loadValues();
     }
 
-    public function next(): void
+    public function commit(): void
     {
-        Answer::updateOrCreate(
-            ['configuration_id' => $this->configuration->id, 'view_id' => $this->currentGroup->id],
-            ['value' => true],
-        );
+        $stepIds = ViewModel::query()
+            ->whereIn('id', $this->scopeViewIds)
+            ->where('type', ViewType::Group)
+            ->pluck('id');
 
-        $this->evaluate();
+        $pending = array_filter($this->values, fn (mixed $value): bool => $value !== null);
+        foreach ($stepIds as $stepId) {
+            $pending[$stepId] = true;
+        }
 
-        if (! empty($this->fieldErrors) || $this->nextGroupId === null) {
+        $evaluation = app(CommitConfigurationAnswers::class)($this->configuration, $pending);
+
+        $this->fieldErrors = $evaluation->componentContexts['validation'] ?? [];
+
+        if ($this->fieldErrors !== []) {
             return;
         }
 
-        $this->currentGroup = ViewModel::query()->where('id', $this->nextGroupId)->firstOrFail();
-        $this->loadCurrentGroup();
+        $this->values = [];
+        $this->fetch();
+        $this->loadValues();
     }
 
     /**
@@ -72,33 +75,42 @@ class PlayConfigurator extends Component
      */
     public function items(): array
     {
-        return ViewModel::query()->where('parent_id', $this->currentGroup->id)->orderBy('order')->get()->all();
+        return ViewModel::query()
+            ->where('configurator_id', $this->configurator->id)
+            ->tree()
+            ->depthFirst()
+            ->get()
+            ->filter(fn (ViewModel $view): bool => in_array($view->id, $this->scopeViewIds, true) && $view->type !== ViewType::Group)
+            ->values()
+            ->all();
     }
 
-    private function loadCurrentGroup(): void
+    private function fetch(): void
+    {
+        $evaluation = app(FetchConfigurationState::class)($this->configuration, $this->values);
+
+        $this->visibleViewIds = array_keys(array_filter($evaluation->componentContexts['visibility'] ?? []));
+        $this->scopeViewIds = $evaluation->componentContexts['scope'] ?? [];
+        $this->fieldErrors = $evaluation->componentContexts['validation'] ?? [];
+    }
+
+    private function loadValues(): void
     {
         $items = $this->items();
+
         $existing = $this->configuration->answers()
             ->whereIn('view_id', array_map(fn (ViewModel $item) => $item->id, $items))
             ->get()
             ->pluck('value', 'view_id');
 
-        $this->values = [];
         foreach ($items as $item) {
+            if (array_key_exists($item->id, $this->values)) {
+                continue;
+            }
+
             $multiple = $item->config['multiple'] ?? false;
             $this->values[$item->id] = $existing[$item->id] ?? ($multiple ? [] : null);
         }
-
-        $this->evaluate();
-    }
-
-    private function evaluate(): void
-    {
-        $evaluation = app(EvaluateGroup::class)($this->currentGroup, $this->configuration);
-
-        $this->visibleViewIds = $evaluation->componentContexts['visibility'] ?? [];
-        $this->fieldErrors = $evaluation->componentContexts['validation'] ?? [];
-        $this->nextGroupId = $evaluation->componentContexts['next_group'] ?? null;
     }
 
     public function render(): ViewContract

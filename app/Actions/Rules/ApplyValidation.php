@@ -2,37 +2,36 @@
 
 namespace App\Actions\Rules;
 
-use App\Enums\RuleComponent;
-use App\Models\Rule;
+use App\Actions\DTO\ConfigurationEvaluation;
+use App\Enums\ComponentType;
 use Closure;
 
 final class ApplyValidation
 {
     public function __construct(
-        private readonly EvaluateRule $evaluateRule,
+        private readonly EvaluateViewValidity $evaluateViewValidity,
     ) {}
 
-    public function __invoke(GroupEvaluation $evaluation, Closure $next): mixed
+    public function __invoke(ConfigurationEvaluation $evaluation, Closure $next): mixed
     {
         $errors = [];
 
-        $viewIds = [$evaluation->group->id, ...($evaluation->componentContexts[RuleComponent::Visibility->value] ?? [])];
+        $visibility = $evaluation->componentContexts[ComponentType::Visibility->value] ?? [];
+        $viewIds = $evaluation->componentContexts[ComponentType::Scope->value] ?? [];
 
         foreach ($viewIds as $viewId) {
-            $rules = Rule::query()
-                ->where('view_id', $viewId)
-                ->where('component', RuleComponent::Validation)
-                ->orderBy('order')
-                ->get();
+            if (! ($visibility[$viewId] ?? false)) {
+                continue;
+            }
 
-            foreach ($rules as $rule) {
-                if (! ($this->evaluateRule)($rule, $evaluation->context)) {
-                    $errors[$viewId][] = $rule->meta['message'] ?? 'invalid';
-                }
+            $viewErrors = ($this->evaluateViewValidity)($viewId, $evaluation->context);
+
+            if ($viewErrors !== []) {
+                $errors[$viewId] = $viewErrors;
             }
         }
 
-        $evaluation->componentContexts[RuleComponent::Validation->value] = $errors;
+        $evaluation->componentContexts[ComponentType::Validation->value] = $errors;
 
         return $next($evaluation);
     }

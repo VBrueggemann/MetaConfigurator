@@ -1,0 +1,91 @@
+<?php
+
+namespace App\Actions\Rules;
+
+use App\Actions\DTO\ConfigurationEvaluation;
+use App\Enums\ComponentType;
+use App\Models\Component;
+use Closure;
+use RuntimeException;
+
+final class ApplyCalculation
+{
+    public function __construct(
+        private readonly EvaluateExpression $evaluateExpression,
+    ) {}
+
+    public function __invoke(ConfigurationEvaluation $evaluation, Closure $next): mixed
+    {
+        $component = Component::query()
+            ->where('configurator_id', $evaluation->configuration->configurator_id)
+            ->where('type', ComponentType::Calculation)
+            ->first();
+
+        /** @var array<string, string> $formulas */
+        $formulas = $component?->config['formulas'] ?? [];
+
+        $evaluation->context['calculation'] = (object) $this->resolve($formulas, $evaluation->context);
+
+        return $next($evaluation);
+    }
+
+    /**
+     * @param  array<string, string>  $formulas
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>
+     */
+    private function resolve(array $formulas, array $context): array
+    {
+        $results = [];
+
+        foreach ($this->topologicalOrder($formulas) as $name) {
+            $results[$name] = ($this->evaluateExpression)($formulas[$name], [...$context, 'calculation' => (object) $results]);
+        }
+
+        return $results;
+    }
+
+    /**
+     * Orders formulas so a formula referencing `calculation.<name>` is evaluated after `<name>`.
+     *
+     * @param  array<string, string>  $formulas
+     * @return list<string>
+     */
+    private function topologicalOrder(array $formulas): array
+    {
+        $dependenciesByName = [];
+
+        foreach ($formulas as $name => $expression) {
+            preg_match_all('/calculation\.([a-zA-Z_][a-zA-Z0-9_]*)/', $expression, $matches);
+            $dependenciesByName[$name] = array_values(array_intersect(array_unique($matches[1]), array_keys($formulas)));
+        }
+
+        $resolved = [];
+        $visiting = [];
+
+        $visit = function (string $name) use (&$visit, &$resolved, &$visiting, $dependenciesByName): void {
+            if (in_array($name, $resolved, true)) {
+                return;
+            }
+
+            if (in_array($name, $visiting, true)) {
+                throw new RuntimeException("Circular calculation dependency involving '{$name}'.");
+            }
+
+            $visiting[] = $name;
+
+            foreach ($dependenciesByName[$name] as $dependency) {
+                $visit($dependency);
+            }
+
+            $visiting = array_diff($visiting, [$name]);
+            $resolved[] = $name;
+        };
+
+        foreach (array_keys($formulas) as $name) {
+            $visit($name);
+        }
+
+        return $resolved;
+    }
+}

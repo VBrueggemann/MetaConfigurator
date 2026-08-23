@@ -17,7 +17,7 @@ it('works for each rule component', function (RuleComponent $component) {
     $rule = Rule::factory()->make(['component' => $component, 'expression' => 'true']);
 
     expect(app(EvaluateRule::class)($rule, []))->toBeTrue();
-})->with([RuleComponent::Visibility, RuleComponent::Validation, RuleComponent::NextGroup]);
+})->with([RuleComponent::Visibility, RuleComponent::Validation]);
 
 it('returns false rather than throwing when the expression references a missing field', function () {
     $rule = Rule::factory()->make(['expression' => "answers['missing'] == 'x'"]);

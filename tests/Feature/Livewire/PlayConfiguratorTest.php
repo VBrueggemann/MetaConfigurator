@@ -38,16 +38,15 @@ it('starts a new Configuration on first visit and remembers it across a fresh vi
     expect(Configuration::count())->toBe(1);
 });
 
-it('persists an answer immediately when a field changes', function () {
+it('does not persist an answer until commit is called', function () {
     $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator]);
 
     $component->set("values.{$this->name->id}", 'Ada');
 
-    $configuration = Configuration::sole();
-    expect(Answer::where('configuration_id', $configuration->id)->where('view_id', $this->name->id)->first()->value)->toBe('Ada');
+    expect(Answer::count())->toBe(0);
 });
 
-it('reveals the allergy question once diet is set to vegan', function () {
+it('reveals the allergy question once diet is set to vegan, without persisting', function () {
     $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator]);
 
     expect($component->get('visibleViewIds'))->not->toContain($this->allergy->id);
@@ -55,14 +54,16 @@ it('reveals the allergy question once diet is set to vegan', function () {
     $component->set("values.{$this->diet->id}", 'vegan');
 
     expect($component->get('visibleViewIds'))->toContain($this->allergy->id);
+    expect(Answer::count())->toBe(0);
 });
 
 it('does not advance past About You while required fields are missing', function () {
     $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator]);
 
-    $component->call('next');
+    $component->call('commit');
 
-    expect($component->get('currentGroup')->id)->toBe($this->aboutYou->id);
+    expect($component->get('scopeViewIds'))->toContain($this->aboutYou->id);
+    expect(Answer::count())->toBe(0);
 });
 
 it('walks a non-vegan respondent through General to Thank You', function () {
@@ -70,18 +71,16 @@ it('walks a non-vegan respondent through General to Thank You', function () {
         ->set("values.{$this->name->id}", 'Ada')
         ->set("values.{$this->diet->id}", 'omnivore')
         ->set("values.{$this->activities->id}", ['hiking'])
-        ->call('next');
+        ->call('commit');
 
-    expect($component->get('currentGroup')->id)->toBe($this->general->id);
+    expect($component->get('scopeViewIds'))->toContain($this->general->id);
 
-    // A fresh mount (simulating a page reload) must stay on General — not
-    // skip past it — until its content has actually been acknowledged.
     $reloaded = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator]);
-    expect($reloaded->get('currentGroup')->id)->toBe($this->general->id);
+    expect($reloaded->get('scopeViewIds'))->toContain($this->general->id);
 
-    $component->call('next');
+    $component->call('commit');
 
-    expect($component->get('currentGroup')->id)->toBe($this->thankYou->id);
+    expect($component->get('scopeViewIds'))->toContain($this->thankYou->id);
 });
 
 it('walks a vegan respondent through Vegan Extras to Thank You', function () {
@@ -90,11 +89,11 @@ it('walks a vegan respondent through Vegan Extras to Thank You', function () {
         ->set("values.{$this->diet->id}", 'vegan')
         ->set("values.{$this->activities->id}", ['cooking'])
         ->set("values.{$this->allergy->id}", 'peanuts')
-        ->call('next');
+        ->call('commit');
 
-    expect($component->get('currentGroup')->id)->toBe($this->veganExtras->id);
+    expect($component->get('scopeViewIds'))->toContain($this->veganExtras->id);
 
-    $component->call('next');
+    $component->call('commit');
 
-    expect($component->get('currentGroup')->id)->toBe($this->thankYou->id);
+    expect($component->get('scopeViewIds'))->toContain($this->thankYou->id);
 });

@@ -19,7 +19,8 @@ it('builds an answers map keyed by view id from the configuration\'s current ans
 
     $context = app(BuildAnswerContext::class)($configuration);
 
-    expect($context)->toBe(['answers' => [$name->id => 'Ada']]);
+    expect($context['answers'])->toBe([$name->id => 'Ada']);
+    expect($context['answeredViewIds'])->toBe([$name->id]);
 });
 
 it('returns an empty answers map when nothing has been answered yet', function () {
@@ -27,7 +28,8 @@ it('returns an empty answers map when nothing has been answered yet', function (
 
     $context = app(BuildAnswerContext::class)($configuration);
 
-    expect($context)->toBe(['answers' => []]);
+    expect($context['answers'])->toBe([]);
+    expect($context['answeredViewIds'])->toBe([]);
 });
 
 it('nests answers under their parent group id, as well as flat by view id', function () {
@@ -43,10 +45,35 @@ it('nests answers under their parent group id, as well as flat by view id', func
 
     $context = app(BuildAnswerContext::class)($configuration);
 
-    expect($context)->toBe(['answers' => [
+    expect($context['answers'])->toBe([
         $name->id => 'Ada',
         $groupOne->id => [$name->id => 'Ada'],
         $diet->id => 'veg',
         $groupTwo->id => [$diet->id => 'veg'],
-    ]]);
+    ]);
+    expect($context['answeredViewIds'])->toEqualCanonicalizing([$name->id, $diet->id]);
+});
+
+it('lets a pending answer preview over a persisted one without changing what counts as answered', function () {
+    $configurator = Configurator::factory()->create();
+    $name = View::factory()->textInput()->create(['configurator_id' => $configurator->id]);
+
+    $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
+    Answer::factory()->create(['configuration_id' => $configuration->id, 'view_id' => $name->id, 'value' => 'Ada']);
+
+    $context = app(BuildAnswerContext::class)($configuration, [$name->id => 'Grace']);
+
+    expect($context['answers'][$name->id])->toBe('Grace');
+    expect($context['answeredViewIds'])->toBe([$name->id]);
+});
+
+it('previews a pending answer for a view with nothing persisted yet, without marking it answered', function () {
+    $configurator = Configurator::factory()->create();
+    $name = View::factory()->textInput()->create(['configurator_id' => $configurator->id]);
+    $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
+
+    $context = app(BuildAnswerContext::class)($configuration, [$name->id => 'Grace']);
+
+    expect($context['answers'][$name->id])->toBe('Grace');
+    expect($context['answeredViewIds'])->toBe([]);
 });

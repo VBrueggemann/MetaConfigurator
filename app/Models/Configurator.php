@@ -29,4 +29,9 @@ class Configurator extends Model
     {
         return $this->hasMany(Configuration::class);
     }
+
+    public function components(): HasMany
+    {
+        return $this->hasMany(Component::class);
+    }
 }

@@ -1,6 +1,7 @@
 <?php
 
-use App\Actions\Rules\EvaluateGroup;
+use App\Actions\Rules\CommitConfigurationAnswers;
+use App\Actions\Rules\FetchConfigurationState;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\View;
@@ -25,43 +26,30 @@ beforeEach(function () {
     $this->allergy = $items[3];
 });
 
-it('hides the allergy question and routes to General for a non-vegan respondent', function () {
-    answer($this->configuration, $this->name, 'Ada');
+it('hides the allergy question for a non-vegan respondent', function () {
     answer($this->configuration, $this->diet, 'omnivore');
-    answer($this->configuration, $this->activities, ['hiking']);
 
-    $evaluation = app(EvaluateGroup::class)($this->aboutYou, $this->configuration);
+    $evaluation = app(FetchConfigurationState::class)($this->configuration);
 
-    expect($evaluation->componentContexts['visibility'])->not->toContain($this->allergy->id);
-    expect($evaluation->componentContexts['validation'])->toBe([]);
-    expect($evaluation->componentContexts['next_group'])->toBe($this->general->id);
+    expect($evaluation->componentContexts['visibility'][$this->allergy->id])->toBeFalse();
 });
 
-it('shows and requires the allergy question, then routes to Vegan Extras', function () {
-    answer($this->configuration, $this->name, 'Ada');
+it('shows and requires the allergy question for a vegan respondent', function () {
     answer($this->configuration, $this->diet, 'vegan');
-    answer($this->configuration, $this->activities, ['cooking']);
 
-    $evaluation = app(EvaluateGroup::class)($this->aboutYou, $this->configuration);
+    $evaluation = app(FetchConfigurationState::class)($this->configuration);
 
-    expect($evaluation->componentContexts['visibility'])->toContain($this->allergy->id);
+    expect($evaluation->componentContexts['visibility'][$this->allergy->id])->toBeTrue();
     expect($evaluation->componentContexts['validation'])->toHaveKey($this->allergy->id);
-    expect($evaluation->componentContexts['next_group'])->toBeNull();
-
-    answer($this->configuration, $this->allergy, 'peanuts');
-
-    $evaluation = app(EvaluateGroup::class)($this->aboutYou, $this->configuration);
-
-    expect($evaluation->componentContexts['validation'])->toBe([]);
-    expect($evaluation->componentContexts['next_group'])->toBe($this->veganExtras->id);
 });
 
 it('rejects zero and more than three activities, accepts one to three', function (array $value, bool $valid) {
-    answer($this->configuration, $this->name, 'Ada');
-    answer($this->configuration, $this->diet, 'omnivore');
-    answer($this->configuration, $this->activities, $value);
-
-    $evaluation = app(EvaluateGroup::class)($this->aboutYou, $this->configuration);
+    $evaluation = app(CommitConfigurationAnswers::class)($this->configuration, [
+        $this->aboutYou->id => true,
+        $this->name->id => 'Ada',
+        $this->diet->id => 'omnivore',
+        $this->activities->id => $value,
+    ]);
 
     expect(array_key_exists($this->activities->id, $evaluation->componentContexts['validation']))->toBe(! $valid);
 })->with([
@@ -72,37 +60,64 @@ it('rejects zero and more than three activities, accepts one to three', function
 ]);
 
 it('rejects a name over 50 characters', function () {
-    answer($this->configuration, $this->name, str_repeat('a', 51));
-    answer($this->configuration, $this->diet, 'omnivore');
-    answer($this->configuration, $this->activities, ['hiking']);
-
-    $evaluation = app(EvaluateGroup::class)($this->aboutYou, $this->configuration);
+    $evaluation = app(CommitConfigurationAnswers::class)($this->configuration, [
+        $this->aboutYou->id => true,
+        $this->name->id => str_repeat('a', 51),
+        $this->diet->id => 'omnivore',
+        $this->activities->id => ['hiking'],
+    ]);
 
     expect($evaluation->componentContexts['validation'])->toHaveKey($this->name->id);
 });
 
-it('keeps a content-only group current until it is acknowledged, then routes it onward', function () {
-    $evaluation = app(EvaluateGroup::class)($this->general, $this->configuration);
-    expect($evaluation->componentContexts['validation'])->toHaveKey($this->general->id);
-    expect($evaluation->componentContexts['next_group'])->toBeNull();
+it('routes a non-vegan respondent through General to Thank You, skipping Vegan Extras', function () {
+    app(CommitConfigurationAnswers::class)($this->configuration, [
+        $this->aboutYou->id => true,
+        $this->name->id => 'Ada',
+        $this->diet->id => 'omnivore',
+        $this->activities->id => ['hiking'],
+    ]);
 
-    answer($this->configuration, $this->general, true);
+    expect(app(FetchConfigurationState::class)($this->configuration)->componentContexts['scope'])
+        ->toContain($this->general->id);
 
-    $evaluation = app(EvaluateGroup::class)($this->general, $this->configuration);
-    expect($evaluation->componentContexts['validation'])->toBe([]);
-    expect($evaluation->componentContexts['next_group'])->toBe($this->thankYou->id);
+    app(CommitConfigurationAnswers::class)($this->configuration, [$this->general->id => true]);
+
+    expect(app(FetchConfigurationState::class)($this->configuration)->componentContexts['scope'])
+        ->toContain($this->thankYou->id)
+        ->not->toContain($this->veganExtras->id);
 });
 
-it('routes Vegan Extras to Thank You sequentially, once acknowledged', function () {
-    answer($this->configuration, $this->veganExtras, true);
+it('routes a vegan respondent through Vegan Extras to Thank You, skipping General', function () {
+    app(CommitConfigurationAnswers::class)($this->configuration, [
+        $this->aboutYou->id => true,
+        $this->name->id => 'Ada',
+        $this->diet->id => 'vegan',
+        $this->activities->id => ['cooking'],
+        $this->allergy->id => 'peanuts',
+    ]);
 
-    $evaluation = app(EvaluateGroup::class)($this->veganExtras, $this->configuration);
+    expect(app(FetchConfigurationState::class)($this->configuration)->componentContexts['scope'])
+        ->toContain($this->veganExtras->id);
 
-    expect($evaluation->componentContexts['next_group'])->toBe($this->thankYou->id);
+    app(CommitConfigurationAnswers::class)($this->configuration, [$this->veganExtras->id => true]);
+
+    expect(app(FetchConfigurationState::class)($this->configuration)->componentContexts['scope'])
+        ->toContain($this->thankYou->id)
+        ->not->toContain($this->general->id);
 });
 
-it('has no next group after Thank You', function () {
-    $evaluation = app(EvaluateGroup::class)($this->thankYou, $this->configuration);
+it('stays on Thank You once it has been acknowledged', function () {
+    app(CommitConfigurationAnswers::class)($this->configuration, [
+        $this->aboutYou->id => true,
+        $this->name->id => 'Ada',
+        $this->diet->id => 'omnivore',
+        $this->activities->id => ['hiking'],
+    ]);
+    app(CommitConfigurationAnswers::class)($this->configuration, [$this->general->id => true]);
+    app(CommitConfigurationAnswers::class)($this->configuration, [$this->thankYou->id => true]);
 
-    expect($evaluation->componentContexts['next_group'])->toBeNull();
+    $evaluation = app(FetchConfigurationState::class)($this->configuration);
+
+    expect($evaluation->componentContexts['scope'])->toContain($this->thankYou->id);
 });
