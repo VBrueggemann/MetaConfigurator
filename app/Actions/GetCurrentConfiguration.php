@@ -12,7 +12,7 @@ final class GetCurrentConfiguration
         $sessionKey = "metaconfigurator.configuration.{$configurator->id}";
 
         if ($configurationId = session($sessionKey)) {
-            $configuration = Configuration::query()->where('id', $configurationId)->first();
+            $configuration = $configurator->configurations()->find($configurationId);
 
             if ($configuration) {
                 return $configuration;
