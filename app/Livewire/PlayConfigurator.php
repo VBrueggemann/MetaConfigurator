@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Actions\GetCurrentConfiguration;
 use App\Actions\Rules\EvaluateGroup;
 use App\Actions\Rules\ResolveCurrentGroup;
 use App\Models\Answer;
@@ -30,24 +31,11 @@ class PlayConfigurator extends Component
 
     public ?string $nextGroupId = null;
 
-    public function mount(Configurator $configurator, ResolveCurrentGroup $resolveCurrentGroup): void
+    public function mount(Configurator $configurator, GetCurrentConfiguration $getCurrentConfiguration, ResolveCurrentGroup $resolveCurrentGroup): void
     {
         $this->configurator = $configurator;
-
-        $sessionKey = "metaconfigurator.configuration.{$configurator->id}";
-        $configuration = null;
-
-        if ($configurationId = session($sessionKey)) {
-            $configuration = Configuration::query()->where('id', $configurationId)->first();
-        }
-
-        if (! $configuration) {
-            $configuration = Configuration::create(['configurator_id' => $configurator->id]);
-            session([$sessionKey => $configuration->id]);
-        }
-
-        $this->configuration = $configuration;
-        $this->currentGroup = $resolveCurrentGroup($configuration);
+        $this->configuration = $getCurrentConfiguration($configurator);
+        $this->currentGroup = $resolveCurrentGroup($this->configuration);
 
         $this->loadCurrentGroup();
     }

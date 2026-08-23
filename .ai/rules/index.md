@@ -5,6 +5,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | Applies to | Rule file |
 | --- | --- |
 | app/** | .ai/rules/actions.md |
+| app/Actions/** | .ai/rules/app-actions.md |
 | app/** | .ai/rules/app.md |
 | app/** (rules/pipeline/condition evaluation) | .ai/rules/rules-engine.md |
 | app/Models/**, database/migrations/** | .ai/rules/domain-scope.md |
