@@ -2,55 +2,56 @@
 
 namespace App\Actions\Rules;
 
+use App\Actions\DTO\ConfigurationEvaluation;
+use App\Actions\DTO\PendingAnswer;
+use App\Actions\Rules\Scope\ScopeAllStrategy;
+use App\Actions\Rules\Scope\ScopeCurrentViewStrategy;
+use App\Actions\Rules\Scope\ScopeUntilCurrentViewStrategy;
+use App\Enums\ComponentType;
+use App\Enums\ScopeStrategy;
+use App\Models\Component;
 use App\Models\Configuration;
-use App\Models\View;
-use Illuminate\Support\Collection;
+use Closure;
+use Staudenmeir\LaravelAdjacencyList\Eloquent\Relations\Descendants;
 
 final class BuildAnswerContext
 {
-    /**
-     * @param  array<string, mixed>  $pendingAnswers
-     */
-    public function __invoke(Configuration $configuration, array $pendingAnswers = []): array
+    public function __invoke(ConfigurationEvaluation $evaluation, Closure $next): mixed
     {
-        $persistedAnswersByViewId = $configuration->answers()->get()->pluck('value', 'view_id');
-        $answersByViewId = $persistedAnswersByViewId->merge($pendingAnswers);
+        $configuration = $evaluation->configuration;
+        $configuration->loadMissing(['answers', 'configurator.rootView']);
 
-        $answers = [];
-        foreach (View::query()->where('configurator_id', $configuration->configurator_id)->whereNull('parent_id')->orderBy('order')->get() as $group) {
-            $this->walk($group, $answersByViewId, $answers);
-        }
+        $persistedAnswersByViewId = $configuration->answers->pluck('value', 'view_id');
+        $pendingAnswersByViewId = collect($evaluation->pendingAnswers)
+            ->mapWithKeys(fn (PendingAnswer $pendingAnswer): array => [$pendingAnswer->viewId => $pendingAnswer->value]);
 
-        return [
-            'answers' => $answers,
-            'answeredViewIds' => $persistedAnswersByViewId->keys()->all(),
-        ];
+        $evaluation->context['answers'] = $persistedAnswersByViewId->merge($pendingAnswersByViewId)->all();
+
+        $scopedViews = $configuration->configurator->rootView === null
+            ? collect()
+            : $this->scopedViews($configuration)->get();
+
+        $evaluation->context['views'] = $scopedViews->pluck('id');
+
+        $evaluation->componentContexts[ComponentType::Scope->value] = $scopedViews;
+
+        return $next($evaluation);
     }
 
-    private function walk(View $view, Collection $answersByViewId, array &$answers): void
+    private function scopedViews(Configuration $configuration): Descendants
     {
-        $children = View::query()->where('parent_id', $view->id)->orderBy('order')->get();
+        $component = Component::query()
+            ->where('configurator_id', $configuration->configurator_id)
+            ->where('type', ComponentType::Scope)
+            ->first();
 
-        foreach ($children as $child) {
-            $this->walk($child, $answersByViewId, $answers);
-        }
+        $depth = $component?->config['depth'] ?? 0;
+        $strategy = ScopeStrategy::from($component?->config['strategy'] ?? ScopeStrategy::JustNext->value);
 
-        if ($answersByViewId->has($view->id)) {
-            $answers[$view->id] = $answersByViewId->get($view->id);
-
-            return;
-        }
-
-        if ($children->isNotEmpty()) {
-            $nested = [];
-
-            foreach ($children as $child) {
-                if (array_key_exists($child->id, $answers)) {
-                    $nested[$child->id] = $answers[$child->id];
-                }
-            }
-
-            $answers[$view->id] = $nested;
-        }
+        return match ($strategy) {
+            ScopeStrategy::All => app(ScopeAllStrategy::class)($configuration),
+            ScopeStrategy::JustNext => app(ScopeCurrentViewStrategy::class)($configuration, $depth),
+            ScopeStrategy::AnsweredPlusN => app(ScopeUntilCurrentViewStrategy::class)($configuration, $depth),
+        };
     }
 }

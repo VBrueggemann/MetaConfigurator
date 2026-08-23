@@ -16,3 +16,6 @@ Don't add inline comments narrating what a line/block does when the code is alre
 
 ## No descriptions in PHPDoc annotations
 PHPDoc tags (`@param`, `@return`, `@var`, `@throws`, etc.) must not carry a trailing description — type/name only, e.g. `@param string $name` not `@param string $name The user's name`. Don't replace it with an inline comment either — if the name and type aren't enough, that's fine; no comment at all.
+
+## Prefer global helpers over facades or direct class instantiation
+Use Laravel's global helper functions instead of the equivalent facade or `new`'d class where one exists, e.g. `collect()` not `new Collection` / `Collection::make()`, `now()` not `Carbon::now()`, `app()` not `App::make()`, `response()` not `Response::make()`. Keeps call sites terse and consistent with the rest of the codebase. Only reach for the facade/class directly when no helper covers the needed API (e.g. a specific Collection method not exposed as a helper, or when you need the class name for a type hint).

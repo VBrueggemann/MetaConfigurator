@@ -1,12 +1,12 @@
 <?php
 
+use App\Actions\DTO\PendingAnswer;
 use App\Actions\Rules\FetchConfigurationState;
 use App\Models\Component;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\Rule;
 use App\Models\View;
-use RuntimeException;
 
 it('exposes named formula results to expressions via dot access', function () {
     $configurator = Configurator::factory()->create();
@@ -20,7 +20,7 @@ it('exposes named formula results to expressions via dot access', function () {
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
-    $evaluation = app(FetchConfigurationState::class)($configuration, [$qty->id => 2, $price->id => 10]);
+    $evaluation = app(FetchConfigurationState::class)($configuration, [new PendingAnswer($qty->id, 2), new PendingAnswer($price->id, 10)]);
 
     expect($evaluation->context['calculation']->subtotal)->toBe(20);
 });
@@ -54,10 +54,10 @@ it('lets a visibility rule reference a calculation result', function () {
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
-    $hidden = app(FetchConfigurationState::class)($configuration, [$qty->id => 5]);
+    $hidden = app(FetchConfigurationState::class)($configuration, [new PendingAnswer($qty->id, 5)]);
     expect($hidden->componentContexts['visibility'][$discountNotice->id])->toBeFalse();
 
-    $shown = app(FetchConfigurationState::class)($configuration, [$qty->id => 20]);
+    $shown = app(FetchConfigurationState::class)($configuration, [new PendingAnswer($qty->id, 20)]);
     expect($shown->componentContexts['visibility'][$discountNotice->id])->toBeTrue();
 });
 

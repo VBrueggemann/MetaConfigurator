@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\DTO\PendingAnswer;
 use App\Actions\Rules\CommitConfigurationAnswers;
 use App\Models\Answer;
 use App\Models\Configuration;
@@ -15,7 +16,7 @@ it('persists pending answers when validation passes', function () {
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
-    $evaluation = app(CommitConfigurationAnswers::class)($configuration, [$group->id => true, $name->id => 'Ada']);
+    $evaluation = app(CommitConfigurationAnswers::class)($configuration, [new PendingAnswer($group->id, true), new PendingAnswer($name->id, 'Ada')]);
 
     expect($evaluation->componentContexts['validation'])->toBe([]);
     expect(Answer::where('configuration_id', $configuration->id)->where('view_id', $name->id)->first()->value)->toBe('Ada');
@@ -32,9 +33,9 @@ it('persists nothing when any pending answer is invalid (all-or-nothing)', funct
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
     $evaluation = app(CommitConfigurationAnswers::class)($configuration, [
-        $group->id => true,
-        $name->id => 'Ada',
-        $diet->id => null,
+        new PendingAnswer($group->id, true),
+        new PendingAnswer($name->id, 'Ada'),
+        new PendingAnswer($diet->id, null),
     ]);
 
     expect($evaluation->componentContexts['validation'])->toHaveKey($diet->id);
@@ -49,7 +50,7 @@ it('re-validates on commit even without a prior fetch', function () {
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
-    $evaluation = app(CommitConfigurationAnswers::class)($configuration, [$group->id => true]);
+    $evaluation = app(CommitConfigurationAnswers::class)($configuration, [new PendingAnswer($group->id, true)]);
 
     expect($evaluation->componentContexts['validation'])->toHaveKey($name->id);
     expect(Answer::count())->toBe(0);

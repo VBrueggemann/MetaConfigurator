@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Configurator extends Model
 {
@@ -20,9 +21,9 @@ class Configurator extends Model
         return $this->hasMany(View::class);
     }
 
-    public function groups(): HasMany
+    public function rootView(): HasOne
     {
-        return $this->views()->whereNull('parent_id')->orderBy('order');
+        return $this->hasOne(View::class)->withAttributes(['parent_id' => null]);
     }
 
     public function configurations(): HasMany

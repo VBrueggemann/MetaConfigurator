@@ -4,7 +4,9 @@ namespace App\Actions\Rules;
 
 use App\Actions\DTO\ConfigurationEvaluation;
 use App\Enums\ComponentType;
+use App\Models\View;
 use Closure;
+use Illuminate\Support\Collection;
 
 final class ApplyValidation
 {
@@ -17,17 +19,18 @@ final class ApplyValidation
         $errors = [];
 
         $visibility = $evaluation->componentContexts[ComponentType::Visibility->value] ?? [];
-        $viewIds = $evaluation->componentContexts[ComponentType::Scope->value] ?? [];
+        $scopedViews = $evaluation->componentContexts[ComponentType::Scope->value] ?? new Collection;
 
-        foreach ($viewIds as $viewId) {
-            if (! ($visibility[$viewId] ?? false)) {
+        foreach ($scopedViews as $view) {
+            /** @var View $view */
+            if (! ($visibility[$view->id] ?? false)) {
                 continue;
             }
 
-            $viewErrors = ($this->evaluateViewValidity)($viewId, $evaluation->context);
+            $viewErrors = ($this->evaluateViewValidity)($view->id, $evaluation->context);
 
             if ($viewErrors !== []) {
-                $errors[$viewId] = $viewErrors;
+                $errors[$view->id] = $viewErrors;
             }
         }
 

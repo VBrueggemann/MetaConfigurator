@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Actions\DTO\PendingAnswer;
 use App\Actions\GetCurrentConfiguration;
 use App\Actions\Rules\CommitConfigurationAnswers;
 use App\Actions\Rules\FetchConfigurationState;
@@ -57,7 +58,7 @@ class PlayConfigurator extends Component
             $pending[$stepId] = true;
         }
 
-        $evaluation = app(CommitConfigurationAnswers::class)($this->configuration, $pending);
+        $evaluation = app(CommitConfigurationAnswers::class)($this->configuration, $this->toPendingAnswers($pending));
 
         $this->fieldErrors = $evaluation->componentContexts['validation'] ?? [];
 
@@ -87,11 +88,24 @@ class PlayConfigurator extends Component
 
     private function fetch(): void
     {
-        $evaluation = app(FetchConfigurationState::class)($this->configuration, $this->values);
+        $evaluation = app(FetchConfigurationState::class)($this->configuration, $this->toPendingAnswers($this->values));
 
         $this->visibleViewIds = array_keys(array_filter($evaluation->componentContexts['visibility'] ?? []));
-        $this->scopeViewIds = $evaluation->componentContexts['scope'] ?? [];
+        $this->scopeViewIds = ($evaluation->componentContexts['scope'] ?? collect())->pluck('id')->all();
         $this->fieldErrors = $evaluation->componentContexts['validation'] ?? [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $values
+     * @return array<int, PendingAnswer>
+     */
+    private function toPendingAnswers(array $values): array
+    {
+        return array_map(
+            fn (string $viewId, bool|int|string|null $value): PendingAnswer => new PendingAnswer($viewId, $value),
+            array_keys($values),
+            array_values($values),
+        );
     }
 
     private function loadValues(): void
@@ -108,8 +122,7 @@ class PlayConfigurator extends Component
                 continue;
             }
 
-            $multiple = $item->config['multiple'] ?? false;
-            $this->values[$item->id] = $existing[$item->id] ?? ($multiple ? [] : null);
+            $this->values[$item->id] = $existing[$item->id] ?? ($item->type === ViewType::Checkbox ? false : null);
         }
     }
 

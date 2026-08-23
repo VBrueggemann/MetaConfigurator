@@ -1,11 +1,27 @@
 <?php
 
+use App\Actions\DTO\PendingAnswer;
 use App\Actions\Rules\CommitConfigurationAnswers;
 use App\Actions\Rules\FetchConfigurationState;
+use App\Enums\ViewType;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\View;
 use Database\Seeders\FictionalSurveySeeder;
+
+/**
+ * @param  array<string, View>  $activityViews
+ * @param  list<string>  $selected
+ * @return list<PendingAnswer>
+ */
+function activityAnswers(array $activityViews, array $selected): array
+{
+    return array_map(
+        fn (string $key, View $view): PendingAnswer => new PendingAnswer($view->id, in_array($key, $selected, true)),
+        array_keys($activityViews),
+        array_values($activityViews),
+    );
+}
 
 beforeEach(function () {
     app(FictionalSurveySeeder::class)->run();
@@ -13,7 +29,8 @@ beforeEach(function () {
     $configurator = Configurator::where('name', 'Dinner Party Survey')->firstOrFail();
     $this->configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
-    $groups = View::where('configurator_id', $configurator->id)->whereNull('parent_id')->orderBy('order')->get();
+    $root = $configurator->rootView;
+    $groups = View::where('parent_id', $root->id)->orderBy('order')->get();
     $this->aboutYou = $groups[0];
     $this->general = $groups[1];
     $this->veganExtras = $groups[2];
@@ -24,6 +41,14 @@ beforeEach(function () {
     $this->diet = $items[1];
     $this->activities = $items[2];
     $this->allergy = $items[3];
+
+    $activityItems = View::where('parent_id', $this->activities->id)->where('type', ViewType::Checkbox)->orderBy('order')->get();
+    $this->activityViews = [
+        'hiking' => $activityItems[0],
+        'board_games' => $activityItems[1],
+        'karaoke' => $activityItems[2],
+        'cooking' => $activityItems[3],
+    ];
 });
 
 it('hides the allergy question for a non-vegan respondent', function () {
@@ -43,12 +68,12 @@ it('shows and requires the allergy question for a vegan respondent', function ()
     expect($evaluation->componentContexts['validation'])->toHaveKey($this->allergy->id);
 });
 
-it('rejects zero and more than three activities, accepts one to three', function (array $value, bool $valid) {
+it('rejects zero and more than three activities, accepts one to three', function (array $selected, bool $valid) {
     $evaluation = app(CommitConfigurationAnswers::class)($this->configuration, [
-        $this->aboutYou->id => true,
-        $this->name->id => 'Ada',
-        $this->diet->id => 'omnivore',
-        $this->activities->id => $value,
+        new PendingAnswer($this->aboutYou->id, true),
+        new PendingAnswer($this->name->id, 'Ada'),
+        new PendingAnswer($this->diet->id, 'omnivore'),
+        ...activityAnswers($this->activityViews, $selected),
     ]);
 
     expect(array_key_exists($this->activities->id, $evaluation->componentContexts['validation']))->toBe(! $valid);
@@ -61,63 +86,69 @@ it('rejects zero and more than three activities, accepts one to three', function
 
 it('rejects a name over 50 characters', function () {
     $evaluation = app(CommitConfigurationAnswers::class)($this->configuration, [
-        $this->aboutYou->id => true,
-        $this->name->id => str_repeat('a', 51),
-        $this->diet->id => 'omnivore',
-        $this->activities->id => ['hiking'],
+        new PendingAnswer($this->aboutYou->id, true),
+        new PendingAnswer($this->name->id, str_repeat('a', 51)),
+        new PendingAnswer($this->diet->id, 'omnivore'),
+        ...activityAnswers($this->activityViews, ['hiking']),
     ]);
 
     expect($evaluation->componentContexts['validation'])->toHaveKey($this->name->id);
 });
 
-it('routes a non-vegan respondent through General to Thank You, skipping Vegan Extras', function () {
+it('advances scope to Vegan Extras next, even though it is hidden for a non-vegan respondent', function () {
     app(CommitConfigurationAnswers::class)($this->configuration, [
-        $this->aboutYou->id => true,
-        $this->name->id => 'Ada',
-        $this->diet->id => 'omnivore',
-        $this->activities->id => ['hiking'],
+        new PendingAnswer($this->aboutYou->id, true),
+        new PendingAnswer($this->name->id, 'Ada'),
+        new PendingAnswer($this->diet->id, 'omnivore'),
+        ...activityAnswers($this->activityViews, ['hiking']),
     ]);
 
-    expect(app(FetchConfigurationState::class)($this->configuration)->componentContexts['scope'])
+    expect(scopeIds(app(FetchConfigurationState::class)($this->configuration)))
         ->toContain($this->general->id);
 
-    app(CommitConfigurationAnswers::class)($this->configuration, [$this->general->id => true]);
+    app(CommitConfigurationAnswers::class)($this->configuration, [new PendingAnswer($this->general->id, true)]);
 
-    expect(app(FetchConfigurationState::class)($this->configuration)->componentContexts['scope'])
-        ->toContain($this->thankYou->id)
+    // Scope has no visibility awareness, so it advances to the next unanswered
+    // step regardless of Vegan Extras being hidden for a non-vegan respondent.
+    expect(scopeIds(app(FetchConfigurationState::class)($this->configuration)))
+        ->toContain($this->veganExtras->id)
+        ->not->toContain($this->thankYou->id);
+});
+
+it('advances through General to Vegan Extras in step order, even for a vegan respondent', function () {
+    app(CommitConfigurationAnswers::class)($this->configuration, [
+        new PendingAnswer($this->aboutYou->id, true),
+        new PendingAnswer($this->name->id, 'Ada'),
+        new PendingAnswer($this->diet->id, 'vegan'),
+        ...activityAnswers($this->activityViews, ['cooking']),
+        new PendingAnswer($this->allergy->id, 'peanuts'),
+    ]);
+
+    // Scope steps through General before Vegan Extras purely by order,
+    // regardless of General being hidden for a vegan respondent.
+    expect(scopeIds(app(FetchConfigurationState::class)($this->configuration)))
+        ->toContain($this->general->id)
         ->not->toContain($this->veganExtras->id);
+
+    app(CommitConfigurationAnswers::class)($this->configuration, [new PendingAnswer($this->general->id, true)]);
+
+    expect(scopeIds(app(FetchConfigurationState::class)($this->configuration)))
+        ->toContain($this->veganExtras->id)
+        ->not->toContain($this->thankYou->id);
 });
 
-it('routes a vegan respondent through Vegan Extras to Thank You, skipping General', function () {
+it('stays on Thank You once every step, including the hidden one, has been acknowledged', function () {
     app(CommitConfigurationAnswers::class)($this->configuration, [
-        $this->aboutYou->id => true,
-        $this->name->id => 'Ada',
-        $this->diet->id => 'vegan',
-        $this->activities->id => ['cooking'],
-        $this->allergy->id => 'peanuts',
+        new PendingAnswer($this->aboutYou->id, true),
+        new PendingAnswer($this->name->id, 'Ada'),
+        new PendingAnswer($this->diet->id, 'omnivore'),
+        ...activityAnswers($this->activityViews, ['hiking']),
     ]);
-
-    expect(app(FetchConfigurationState::class)($this->configuration)->componentContexts['scope'])
-        ->toContain($this->veganExtras->id);
-
-    app(CommitConfigurationAnswers::class)($this->configuration, [$this->veganExtras->id => true]);
-
-    expect(app(FetchConfigurationState::class)($this->configuration)->componentContexts['scope'])
-        ->toContain($this->thankYou->id)
-        ->not->toContain($this->general->id);
-});
-
-it('stays on Thank You once it has been acknowledged', function () {
-    app(CommitConfigurationAnswers::class)($this->configuration, [
-        $this->aboutYou->id => true,
-        $this->name->id => 'Ada',
-        $this->diet->id => 'omnivore',
-        $this->activities->id => ['hiking'],
-    ]);
-    app(CommitConfigurationAnswers::class)($this->configuration, [$this->general->id => true]);
-    app(CommitConfigurationAnswers::class)($this->configuration, [$this->thankYou->id => true]);
+    app(CommitConfigurationAnswers::class)($this->configuration, [new PendingAnswer($this->general->id, true)]);
+    app(CommitConfigurationAnswers::class)($this->configuration, [new PendingAnswer($this->veganExtras->id, true)]);
+    app(CommitConfigurationAnswers::class)($this->configuration, [new PendingAnswer($this->thankYou->id, true)]);
 
     $evaluation = app(FetchConfigurationState::class)($this->configuration);
 
-    expect($evaluation->componentContexts['scope'])->toContain($this->thankYou->id);
+    expect(scopeIds($evaluation))->toContain($this->thankYou->id);
 });

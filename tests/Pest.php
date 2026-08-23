@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\DTO\ConfigurationEvaluation;
 use App\Models\Answer;
 use App\Models\Configuration;
 use App\Models\View;
@@ -54,4 +55,12 @@ function answer(Configuration $configuration, View $view, mixed $value): Answer
         'view_id' => $view->id,
         'value' => $value,
     ]);
+}
+
+/**
+ * @return list<string>
+ */
+function scopeIds(ConfigurationEvaluation $evaluation): array
+{
+    return $evaluation->componentContexts['scope']->pluck('id')->all();
 }

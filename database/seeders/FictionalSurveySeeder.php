@@ -14,10 +14,12 @@ class FictionalSurveySeeder extends Seeder
     {
         $configurator = Configurator::factory()->create(['name' => 'Dinner Party Survey']);
 
-        $aboutYou = View::factory()->group()->create(['configurator_id' => $configurator->id, 'order' => 0]);
-        $general = View::factory()->group()->create(['configurator_id' => $configurator->id, 'order' => 1]);
-        $veganExtras = View::factory()->group()->create(['configurator_id' => $configurator->id, 'order' => 2]);
-        $thankYou = View::factory()->group()->create(['configurator_id' => $configurator->id, 'order' => 3]);
+        $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+
+        $aboutYou = View::factory()->group()->childOf($root)->create(['order' => 0]);
+        $general = View::factory()->group()->childOf($root)->create(['order' => 1]);
+        $veganExtras = View::factory()->group()->childOf($root)->create(['order' => 2]);
+        $thankYou = View::factory()->group()->childOf($root)->create(['order' => 3]);
 
         $name = View::factory()->textInput(label: 'What is your name?')->childOf($aboutYou)->create(['order' => 0]);
         $diet = View::factory()->select([
@@ -25,12 +27,12 @@ class FictionalSurveySeeder extends Seeder
             ['value' => 'vegetarian', 'label' => 'Vegetarian'],
             ['value' => 'vegan', 'label' => 'Vegan'],
         ], label: 'What is your diet?')->childOf($aboutYou)->create(['order' => 1]);
-        $activities = View::factory()->select([
-            ['value' => 'hiking', 'label' => 'Hiking'],
-            ['value' => 'board_games', 'label' => 'Board games'],
-            ['value' => 'karaoke', 'label' => 'Karaoke'],
-            ['value' => 'cooking', 'label' => 'Cooking'],
-        ], multiple: true, label: 'Which activities are you interested in? (1-3)')->childOf($aboutYou)->create(['order' => 2]);
+        $activities = View::factory()->group()->childOf($aboutYou)->create(['order' => 2]);
+        View::factory()->html('Which activities are you interested in? (1-3)')->childOf($activities)->create(['order' => 0]);
+        $hiking = View::factory()->checkbox(label: 'Hiking')->childOf($activities)->create(['order' => 1]);
+        $boardGames = View::factory()->checkbox(label: 'Board games')->childOf($activities)->create(['order' => 2]);
+        $karaoke = View::factory()->checkbox(label: 'Karaoke')->childOf($activities)->create(['order' => 3]);
+        $cooking = View::factory()->checkbox(label: 'Cooking')->childOf($activities)->create(['order' => 4]);
         $allergy = View::factory()->textInput(label: 'Please describe your allergy')->childOf($aboutYou)->create(['order' => 3]);
 
         View::factory()->html('Thanks! We\'ll use your preferences to plan the party.')
@@ -51,9 +53,11 @@ class FictionalSurveySeeder extends Seeder
         Rule::factory()->validation("answers['{$diet->id}'] != null")
             ->create(['view_id' => $diet->id, 'meta' => ['message' => 'Please choose a diet.']]);
 
-        Rule::factory()->validation("answers['{$activities->id}'] != null && count(answers['{$activities->id}']) >= 1")
+        $selectedActivityCount = "(answers['{$hiking->id}'] == true ? 1 : 0) + (answers['{$boardGames->id}'] == true ? 1 : 0) + (answers['{$karaoke->id}'] == true ? 1 : 0) + (answers['{$cooking->id}'] == true ? 1 : 0)";
+
+        Rule::factory()->validation("{$selectedActivityCount} >= 1")
             ->create(['view_id' => $activities->id, 'meta' => ['message' => 'Choose at least one activity.']]);
-        Rule::factory()->validation("answers['{$activities->id}'] == null || count(answers['{$activities->id}']) <= 3")
+        Rule::factory()->validation("{$selectedActivityCount} <= 3")
             ->create(['view_id' => $activities->id, 'meta' => ['message' => 'Choose at most three activities.']]);
 
         Rule::factory()->validation("answers['{$allergy->id}'] != null && strlen(answers['{$allergy->id}']) > 0")
@@ -69,7 +73,9 @@ class FictionalSurveySeeder extends Seeder
         Rule::factory()->visibility("answers['{$diet->id}'] == 'vegan'")
             ->create(['view_id' => $veganExtras->id]);
 
-        Component::factory()->scope('just_next', depth: 0)
+        Component::factory()->scope('just_next', depth: 1)
             ->create(['configurator_id' => $configurator->id]);
+
+        $this->command?->info('   Configrator: '.route('configurators.play', ['configurator' => $configurator->id]));
     }
 }

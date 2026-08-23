@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\ViewType;
 use App\Livewire\PlayConfigurator;
 use App\Models\Answer;
 use App\Models\Configuration;
@@ -13,7 +14,8 @@ beforeEach(function () {
 
     $this->configurator = Configurator::where('name', 'Dinner Party Survey')->firstOrFail();
 
-    $groups = View::where('configurator_id', $this->configurator->id)->whereNull('parent_id')->orderBy('order')->get();
+    $root = $this->configurator->rootView;
+    $groups = View::where('parent_id', $root->id)->orderBy('order')->get();
     $this->aboutYou = $groups[0];
     $this->general = $groups[1];
     $this->veganExtras = $groups[2];
@@ -24,6 +26,10 @@ beforeEach(function () {
     $this->diet = $items[1];
     $this->activities = $items[2];
     $this->allergy = $items[3];
+
+    $activityItems = View::where('parent_id', $this->activities->id)->where('type', ViewType::Checkbox)->orderBy('order')->get();
+    $this->hiking = $activityItems[0];
+    $this->cooking = $activityItems[3];
 });
 
 it('starts a new Configuration on first visit and remembers it across a fresh visit', function () {
@@ -66,11 +72,11 @@ it('does not advance past About You while required fields are missing', function
     expect(Answer::count())->toBe(0);
 });
 
-it('walks a non-vegan respondent through General to Thank You', function () {
+it('walks a non-vegan respondent through General next, then Vegan Extras', function () {
     $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator])
         ->set("values.{$this->name->id}", 'Ada')
         ->set("values.{$this->diet->id}", 'omnivore')
-        ->set("values.{$this->activities->id}", ['hiking'])
+        ->set("values.{$this->hiking->id}", true)
         ->call('commit');
 
     expect($component->get('scopeViewIds'))->toContain($this->general->id);
@@ -80,20 +86,24 @@ it('walks a non-vegan respondent through General to Thank You', function () {
 
     $component->call('commit');
 
-    expect($component->get('scopeViewIds'))->toContain($this->thankYou->id);
+    // Scope has no visibility awareness, so it advances to Vegan Extras next
+    // purely by step order, even though it is hidden for a non-vegan respondent.
+    expect($component->get('scopeViewIds'))->toContain($this->veganExtras->id);
 });
 
-it('walks a vegan respondent through Vegan Extras to Thank You', function () {
+it('walks a vegan respondent through General next, then Vegan Extras', function () {
     $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator])
         ->set("values.{$this->name->id}", 'Ada')
         ->set("values.{$this->diet->id}", 'vegan')
-        ->set("values.{$this->activities->id}", ['cooking'])
+        ->set("values.{$this->cooking->id}", true)
         ->set("values.{$this->allergy->id}", 'peanuts')
         ->call('commit');
 
-    expect($component->get('scopeViewIds'))->toContain($this->veganExtras->id);
+    // General comes before Vegan Extras in step order, so scope reaches it
+    // first even though it is hidden for a vegan respondent.
+    expect($component->get('scopeViewIds'))->toContain($this->general->id);
 
     $component->call('commit');
 
-    expect($component->get('scopeViewIds'))->toContain($this->thankYou->id);
+    expect($component->get('scopeViewIds'))->toContain($this->veganExtras->id);
 });

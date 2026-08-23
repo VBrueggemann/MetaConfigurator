@@ -17,19 +17,12 @@
                             wire:model.live.debounce.500ms="values.{{ $item->id }}"
                             class="w-full rounded border border-gray-300 px-3 py-2"
                         />
-                    @elseif ($item->type->value === 'select' && ($item->config['multiple'] ?? false))
-                        <div class="space-y-1">
-                            @foreach ($item->config['options'] ?? [] as $option)
-                                <label class="flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        value="{{ $option['value'] }}"
-                                        wire:model.live="values.{{ $item->id }}"
-                                    />
-                                    {{ $option['label'] }}
-                                </label>
-                            @endforeach
-                        </div>
+                    @elseif ($item->type->value === 'checkbox')
+                        <input
+                            type="checkbox"
+                            wire:model.live="values.{{ $item->id }}"
+                            class="h-4 w-4 rounded border-gray-300"
+                        />
                     @elseif ($item->type->value === 'select')
                         <select wire:model.live="values.{{ $item->id }}" class="w-full rounded border border-gray-300 px-3 py-2">
                             <option value="">—</option>

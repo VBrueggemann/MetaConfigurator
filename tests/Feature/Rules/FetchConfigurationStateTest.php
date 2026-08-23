@@ -1,7 +1,9 @@
 <?php
 
+use App\Actions\DTO\PendingAnswer;
 use App\Actions\Rules\FetchConfigurationState;
 use App\Models\Answer;
+use App\Models\Component;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\Rule;
@@ -68,49 +70,55 @@ it('previews pending answers without persisting them', function () {
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
-    $evaluation = app(FetchConfigurationState::class)($configuration, [$diet->id => 'vegan']);
+    $evaluation = app(FetchConfigurationState::class)($configuration, [new PendingAnswer($diet->id, 'vegan')]);
 
     expect($evaluation->componentContexts['visibility'][$allergy->id])->toBeTrue();
     expect(Answer::count())->toBe(0);
 });
 
-it('reveals only the current unanswered step by default (just_next strategy, depth 0)', function () {
+it('reveals only the current unanswered step (just_next strategy)', function () {
     $configurator = Configurator::factory()->create();
-    $groupOne = View::factory()->group()->create(['configurator_id' => $configurator->id, 'order' => 0]);
-    $groupTwo = View::factory()->group()->create(['configurator_id' => $configurator->id, 'order' => 1]);
+    $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
+    $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
     $name = View::factory()->textInput()->childOf($groupOne)->create();
     Rule::factory()->validation("answers['{$name->id}'] != null")->create(['view_id' => $name->id]);
+    Component::factory()->scope('just_next', 1)->create(['configurator_id' => $configurator->id]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
     $evaluation = app(FetchConfigurationState::class)($configuration);
 
-    expect($evaluation->componentContexts['scope'])->toContain($groupOne->id, $name->id);
-    expect($evaluation->componentContexts['scope'])->not->toContain($groupTwo->id);
+    expect(scopeIds($evaluation))->toContain($groupOne->id, $name->id);
+    expect(scopeIds($evaluation))->not->toContain($groupTwo->id);
 });
 
-it('advances scope to the next step only once the current one is persisted', function () {
+it('advances scope to the next step once the current one has any answer', function () {
     $configurator = Configurator::factory()->create();
-    $groupOne = View::factory()->group()->create(['configurator_id' => $configurator->id, 'order' => 0]);
-    $groupTwo = View::factory()->group()->create(['configurator_id' => $configurator->id, 'order' => 1]);
+    $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
+    $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
+    Component::factory()->scope('just_next', 1)->create(['configurator_id' => $configurator->id]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     answer($configuration, $groupOne, true);
 
     $evaluation = app(FetchConfigurationState::class)($configuration);
 
-    expect($evaluation->componentContexts['scope'])->toBe([$groupTwo->id]);
+    expect(scopeIds($evaluation))->toEqualCanonicalizing([$root->id, $groupTwo->id]);
 });
 
 it('does not advance scope from a pending answer alone', function () {
     $configurator = Configurator::factory()->create();
-    $groupOne = View::factory()->group()->create(['configurator_id' => $configurator->id, 'order' => 0]);
-    $groupTwo = View::factory()->group()->create(['configurator_id' => $configurator->id, 'order' => 1]);
+    $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
+    $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
+    Component::factory()->scope('just_next', 1)->create(['configurator_id' => $configurator->id]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
-    $evaluation = app(FetchConfigurationState::class)($configuration, [$groupOne->id => true]);
+    $evaluation = app(FetchConfigurationState::class)($configuration, [new PendingAnswer($groupOne->id, true)]);
 
-    expect($evaluation->componentContexts['scope'])->toBe([$groupOne->id]);
-    expect($evaluation->componentContexts['scope'])->not->toContain($groupTwo->id);
+    expect(scopeIds($evaluation))->toEqualCanonicalizing([$root->id, $groupOne->id]);
+    expect(scopeIds($evaluation))->not->toContain($groupTwo->id);
 });

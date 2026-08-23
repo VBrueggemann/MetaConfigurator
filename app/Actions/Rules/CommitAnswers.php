@@ -17,10 +17,10 @@ final class CommitAnswers
         }
 
         DB::transaction(function () use ($evaluation) {
-            foreach ($evaluation->pendingAnswers as $viewId => $value) {
+            foreach ($evaluation->pendingAnswers as $pendingAnswer) {
                 Answer::updateOrCreate(
-                    ['configuration_id' => $evaluation->configuration->id, 'view_id' => $viewId],
-                    ['value' => $value],
+                    ['configuration_id' => $evaluation->configuration->id, 'view_id' => $pendingAnswer->viewId],
+                    ['value' => $pendingAnswer->value],
                 );
             }
         });

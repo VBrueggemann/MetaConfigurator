@@ -33,11 +33,11 @@ class ViewFactory extends Factory
         return $this->state(fn () => ['type' => ViewType::Group]);
     }
 
-    public function select(array $options, bool $multiple = false, ?string $label = null): static
+    public function select(array $options, ?string $label = null): static
     {
         return $this->state(fn () => [
             'type' => ViewType::Select,
-            'config' => ['label' => $label ?? fake()->sentence(), 'multiple' => $multiple, 'options' => $options],
+            'config' => ['label' => $label ?? fake()->sentence(), 'options' => $options],
         ]);
     }
 
@@ -45,6 +45,14 @@ class ViewFactory extends Factory
     {
         return $this->state(fn () => [
             'type' => ViewType::TextInput,
+            'config' => ['label' => $label ?? fake()->sentence()],
+        ]);
+    }
+
+    public function checkbox(?string $label = null): static
+    {
+        return $this->state(fn () => [
+            'type' => ViewType::Checkbox,
             'config' => ['label' => $label ?? fake()->sentence()],
         ]);
     }
