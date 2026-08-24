@@ -36,17 +36,17 @@ class PlayConfigurator extends Component
         $this->configurator = $configurator;
         $this->configuration = $getCurrentConfiguration($configurator);
 
-        $this->fetch();
+        $this->fetch(advanceScope: true);
         $this->loadValues();
     }
 
     public function updatedValues(): void
     {
-        $this->fetch();
+        $this->fetch(advanceScope: false);
         $this->loadValues();
     }
 
-    public function commit(): void
+    public function next(): void
     {
         $stepIds = ViewModel::query()
             ->whereIn('id', $this->scopeViewIds)
@@ -67,7 +67,7 @@ class PlayConfigurator extends Component
         }
 
         $this->values = [];
-        $this->fetch();
+        $this->fetch(advanceScope: true);
         $this->loadValues();
     }
 
@@ -86,13 +86,16 @@ class PlayConfigurator extends Component
             ->all();
     }
 
-    private function fetch(): void
+    private function fetch(bool $advanceScope): void
     {
         $evaluation = app(FetchConfigurationState::class)($this->configuration, $this->toPendingAnswers($this->values));
 
         $this->visibleViewIds = array_keys(array_filter($evaluation->componentContexts['visibility'] ?? []));
-        $this->scopeViewIds = ($evaluation->componentContexts['scope'] ?? collect())->pluck('id')->all();
         $this->fieldErrors = $evaluation->componentContexts['validation'] ?? [];
+
+        if ($advanceScope) {
+            $this->scopeViewIds = ($evaluation->componentContexts['scope'] ?? collect())->pluck('id')->all();
+        }
     }
 
     /**

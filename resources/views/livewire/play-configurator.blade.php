@@ -44,9 +44,18 @@
         @endforeach
     </div>
 
+    @php($unattachedErrors = collect($fieldErrors)->except(collect($items)->pluck('id')))
+    @if ($unattachedErrors->isNotEmpty())
+        <ul class="mt-4 text-sm text-red-600">
+            @foreach ($unattachedErrors->flatten() as $message)
+                <li>{{ $message }}</li>
+            @endforeach
+        </ul>
+    @endif
+
     <button
         type="button"
-        wire:click="commit"
+        wire:click="next"
         class="mt-6 rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
     >
         Next

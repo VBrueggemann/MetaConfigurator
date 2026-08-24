@@ -44,7 +44,7 @@ it('starts a new Configuration on first visit and remembers it across a fresh vi
     expect(Configuration::count())->toBe(1);
 });
 
-it('does not persist an answer until commit is called', function () {
+it('does not persist an answer until next is called', function () {
     $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator]);
 
     $component->set("values.{$this->name->id}", 'Ada');
@@ -66,42 +66,99 @@ it('reveals the allergy question once diet is set to vegan, without persisting',
 it('does not advance past About You while required fields are missing', function () {
     $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator]);
 
-    $component->call('commit');
+    $component->call('next');
 
     expect($component->get('scopeViewIds'))->toContain($this->aboutYou->id);
     expect(Answer::count())->toBe(0);
 });
 
-it('walks a non-vegan respondent to Vegan Extras, folding General into the same commit', function () {
-    // Setting diet live already moves scope onto General (its Flow rule matches for
-    // an omnivore respondent), so by the time commit() runs it acknowledges General
-    // alongside About You's fields in the same request. Vegan Extras' own Flow rule
-    // doesn't match for an omnivore respondent, so the order-based default fallback
-    // is what lands scope there next.
+it('does not advance scope on live edits, only on an explicit commit', function () {
+    $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator])
+        ->set("values.{$this->name->id}", 'Ada')
+        ->set("values.{$this->diet->id}", 'vegan');
+
+    expect($component->get('scopeViewIds'))
+        ->toContain($this->aboutYou->id)
+        ->not->toContain($this->veganExtras->id);
+    expect($component->get('visibleViewIds'))
+        ->toContain($this->activities->id)
+        ->toContain($this->allergy->id);
+});
+
+it('walks a non-vegan respondent to Vegan Extras, acknowledging General on a second click', function () {
     $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator])
         ->set("values.{$this->name->id}", 'Ada')
         ->set("values.{$this->diet->id}", 'omnivore')
         ->set("values.{$this->hiking->id}", true)
-        ->call('commit');
+        ->call('next');
+
+    expect($component->get('scopeViewIds'))
+        ->toContain($this->general->id)
+        ->not->toContain($this->veganExtras->id);
+
+    $component->call('next');
 
     expect($component->get('scopeViewIds'))
         ->toContain($this->veganExtras->id)
         ->not->toContain($this->general->id);
 });
 
-it('walks a vegan respondent to Thank You, skipping General and folding Vegan Extras into the same commit', function () {
-    // Setting diet live already moves scope onto Vegan Extras (General's Flow rule
-    // never matches for a vegan respondent, and Vegan Extras' own rule does), so by
-    // the time commit() runs it acknowledges Vegan Extras alongside About You's
-    // fields in the same request, and scope advances straight to Thank You.
+it('walks a vegan respondent to Thank You, skipping General and acknowledging Vegan Extras on a second click', function () {
     $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator])
         ->set("values.{$this->name->id}", 'Ada')
         ->set("values.{$this->diet->id}", 'vegan')
         ->set("values.{$this->cooking->id}", true)
         ->set("values.{$this->allergy->id}", 'peanuts')
-        ->call('commit');
+        ->call('next');
+
+    expect($component->get('scopeViewIds'))
+        ->toContain($this->veganExtras->id)
+        ->not->toContain($this->general->id)
+        ->not->toContain($this->thankYou->id);
+
+    $component->call('next');
 
     expect($component->get('scopeViewIds'))
         ->toContain($this->thankYou->id)
-        ->not->toContain($this->general->id);
+        ->not->toContain($this->veganExtras->id);
+});
+
+it('shows the activities count error when clicking Next with zero activities checked', function () {
+    $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator])
+        ->set("values.{$this->name->id}", 'Ada')
+        ->set("values.{$this->diet->id}", 'omnivore')
+        ->call('next');
+
+    $component->assertSee('Choose at least one activity.');
+});
+
+it('renders the next screen and persists answers after a fully valid commit', function () {
+    $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator])
+        ->set("values.{$this->name->id}", 'Ada')
+        ->set("values.{$this->diet->id}", 'omnivore')
+        ->set("values.{$this->hiking->id}", true)
+        ->call('next');
+
+    $component->assertDontSee('What is your name?');
+    $component->assertSee('Thanks!', false);
+    expect(Answer::count())->toBeGreaterThan(0);
+});
+
+it('does not name a public action after one of Livewire\'s reserved $wire magic actions', function () {
+    // wire:click="commit" silently resolves to the built-in $wire.commit() no-op instead of
+    // calling our method, because the frontend aliases these bare names before ever hitting
+    // the server — Livewire::test()->call() bypasses that alias table, so it can't catch this.
+    $reservedWireAliases = [
+        'on', 'el', 'id', 'js', 'get', 'set', 'refs', 'call', 'hook', 'watch', 'dirty',
+        'effect', 'commit', 'errors', 'island', 'upload', 'entangle', 'dispatch', 'intercept',
+        'interceptAction', 'interceptMessage', 'interceptRequest', 'dispatchTo', 'dispatchSelf',
+        'dispatchEl', 'dispatchRef', 'removeUpload', 'cancelUpload', 'uploadMultiple',
+    ];
+
+    $ownPublicMethods = collect((new ReflectionClass(PlayConfigurator::class))->getMethods(ReflectionMethod::IS_PUBLIC))
+        ->filter(fn (ReflectionMethod $method): bool => $method->getDeclaringClass()->getName() === PlayConfigurator::class)
+        ->map(fn (ReflectionMethod $method): string => $method->getName())
+        ->reject(fn (string $method): bool => in_array($method, ['mount', 'render', 'updatedValues'], true));
+
+    expect($ownPublicMethods->intersect($reservedWireAliases))->toBeEmpty();
 });
