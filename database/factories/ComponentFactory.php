@@ -32,11 +32,11 @@ class ComponentFactory extends Factory
         ]);
     }
 
-    public function scope(string $strategy, int $depth, array $extra = []): static
+    public function scope(int $depth, array $extra = []): static
     {
         return $this->state(fn () => [
             'type' => ComponentType::Scope,
-            'config' => ['strategy' => $strategy, 'depth' => $depth, ...$extra],
+            'config' => ['depth' => $depth, ...$extra],
         ]);
     }
 }

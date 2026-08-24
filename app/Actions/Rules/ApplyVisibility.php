@@ -18,7 +18,7 @@ final class ApplyVisibility
     {
         $visibility = [];
 
-        foreach ($evaluation->componentContexts[ComponentType::Scope->value] as $view) {
+        foreach ($evaluation->componentContexts[ComponentType::Views->value] as $view) {
             $rules = $view->rules->filter(fn ($rule) => $rule->component === RuleComponent::Visibility);
 
             $ownRuleVisible = $rules->every(fn (Rule $rule) => ($this->evaluateRule)($rule, $evaluation->context));
@@ -28,6 +28,7 @@ final class ApplyVisibility
         }
 
         $evaluation->componentContexts[ComponentType::Visibility->value] = $visibility;
+        $evaluation->pendingAnswers = collect($evaluation->pendingAnswers)->filter(fn ($answer) => $visibility[$answer->viewId] ?? false)->values()->toArray();
 
         return $next($evaluation);
     }

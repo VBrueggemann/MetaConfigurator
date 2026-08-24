@@ -72,26 +72,28 @@ it('does not advance past About You while required fields are missing', function
     expect(Answer::count())->toBe(0);
 });
 
-it('walks a non-vegan respondent through General next, then Vegan Extras', function () {
+it('walks a non-vegan respondent to Vegan Extras, folding General into the same commit', function () {
+    // Setting diet live already moves scope onto General (its Flow rule matches for
+    // an omnivore respondent), so by the time commit() runs it acknowledges General
+    // alongside About You's fields in the same request. Vegan Extras' own Flow rule
+    // doesn't match for an omnivore respondent, so the order-based default fallback
+    // is what lands scope there next.
     $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator])
         ->set("values.{$this->name->id}", 'Ada')
         ->set("values.{$this->diet->id}", 'omnivore')
         ->set("values.{$this->hiking->id}", true)
         ->call('commit');
 
-    expect($component->get('scopeViewIds'))->toContain($this->general->id);
-
-    $reloaded = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator]);
-    expect($reloaded->get('scopeViewIds'))->toContain($this->general->id);
-
-    $component->call('commit');
-
-    // Scope has no visibility awareness, so it advances to Vegan Extras next
-    // purely by step order, even though it is hidden for a non-vegan respondent.
-    expect($component->get('scopeViewIds'))->toContain($this->veganExtras->id);
+    expect($component->get('scopeViewIds'))
+        ->toContain($this->veganExtras->id)
+        ->not->toContain($this->general->id);
 });
 
-it('walks a vegan respondent through General next, then Vegan Extras', function () {
+it('walks a vegan respondent to Thank You, skipping General and folding Vegan Extras into the same commit', function () {
+    // Setting diet live already moves scope onto Vegan Extras (General's Flow rule
+    // never matches for a vegan respondent, and Vegan Extras' own rule does), so by
+    // the time commit() runs it acknowledges Vegan Extras alongside About You's
+    // fields in the same request, and scope advances straight to Thank You.
     $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator])
         ->set("values.{$this->name->id}", 'Ada')
         ->set("values.{$this->diet->id}", 'vegan')
@@ -99,11 +101,7 @@ it('walks a vegan respondent through General next, then Vegan Extras', function 
         ->set("values.{$this->allergy->id}", 'peanuts')
         ->call('commit');
 
-    // General comes before Vegan Extras in step order, so scope reaches it
-    // first even though it is hidden for a vegan respondent.
-    expect($component->get('scopeViewIds'))->toContain($this->general->id);
-
-    $component->call('commit');
-
-    expect($component->get('scopeViewIds'))->toContain($this->veganExtras->id);
+    expect($component->get('scopeViewIds'))
+        ->toContain($this->thankYou->id)
+        ->not->toContain($this->general->id);
 });

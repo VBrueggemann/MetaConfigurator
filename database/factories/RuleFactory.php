@@ -36,4 +36,9 @@ class RuleFactory extends Factory
     {
         return $this->state(fn () => ['component' => RuleComponent::Validation, 'expression' => $expression]);
     }
+
+    public function flow(string $expression, string $viewId): static
+    {
+        return $this->state(fn () => ['component' => RuleComponent::Flow, 'expression' => $expression, 'meta' => ['view_id' => $viewId]]);
+    }
 }

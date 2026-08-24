@@ -50,7 +50,13 @@ it('re-validates on commit even without a prior fetch', function () {
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
-    $evaluation = app(CommitConfigurationAnswers::class)($configuration, [new PendingAnswer($group->id, true)]);
+    // Validation only ever runs on submitted pending answers (and their ancestors),
+    // so a real caller always submits every currently-relevant field's value
+    // alongside a step's acknowledgment - here, name is submitted as still empty.
+    $evaluation = app(CommitConfigurationAnswers::class)($configuration, [
+        new PendingAnswer($group->id, true),
+        new PendingAnswer($name->id, null),
+    ]);
 
     expect($evaluation->componentContexts['validation'])->toHaveKey($name->id);
     expect(Answer::count())->toBe(0);

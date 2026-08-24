@@ -73,27 +73,13 @@ it('previews a pending answer for a view with nothing persisted yet', function (
     expect($evaluation->context['answers'][$name->id])->toBe('Grace');
 });
 
-it('reveals every step under the "all" strategy', function () {
-    $configurator = Configurator::factory()->create();
-    $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
-    $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
-    $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
-    Component::factory()->scope('all', 1)->create(['configurator_id' => $configurator->id]);
-
-    $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
-
-    $evaluation = app(FetchConfigurationState::class)($configuration);
-
-    expect(scopeIds($evaluation))->toContain($groupOne->id, $groupTwo->id);
-});
-
-it('reveals the entire tree regardless of the configured depth under the "all" strategy', function () {
+it('reveals the entire tree when depth is 0', function () {
     $configurator = Configurator::factory()->create();
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $section = View::factory()->group()->childOf($root)->create(['order' => 0]);
     $subsection = View::factory()->group()->childOf($section)->create(['order' => 0]);
     $question = View::factory()->textInput()->childOf($subsection)->create(['order' => 0]);
-    Component::factory()->scope('all', 2)->create(['configurator_id' => $configurator->id]);
+    Component::factory()->scope(0)->create(['configurator_id' => $configurator->id]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -102,32 +88,32 @@ it('reveals the entire tree regardless of the configured depth under the "all" s
     expect(scopeIds($evaluation))->toContain($section->id, $subsection->id, $question->id);
 });
 
-it('reveals the answered prefix plus n under the "answered_plus_n" strategy', function () {
+it('loads every view shallower than the configured depth into breadcrumbs', function () {
     $configurator = Configurator::factory()->create();
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
-    $groupThree = View::factory()->group()->childOf($root)->create(['order' => 2]);
-    Component::factory()->scope('answered_plus_n', 1, ['n' => 1])->create(['configurator_id' => $configurator->id]);
+    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     answer($configuration, $groupOne, true);
 
     $evaluation = app(FetchConfigurationState::class)($configuration);
 
-    expect(scopeIds($evaluation))->toContain($groupOne->id, $groupTwo->id);
-    expect(scopeIds($evaluation))->not->toContain($groupThree->id);
+    expect($evaluation->componentContexts['breadcrumbs']->pluck('id'))
+        ->toContain($root->id)
+        ->not->toContain($groupOne->id)
+        ->not->toContain($groupTwo->id);
 });
 
-it('does not skip a step hidden by a visibility rule, since scope has no visibility awareness', function () {
+it('does not skip a step hidden by a visibility rule, since only Flow rules affect the next view', function () {
     $configurator = Configurator::factory()->create();
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
     $diet = View::factory()->textInput()->childOf($groupOne)->create();
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
-    $groupThree = View::factory()->group()->childOf($root)->create(['order' => 2]);
     Rule::factory()->visibility("answers['{$diet->id}'] != 'vegan'")->create(['view_id' => $groupTwo->id]);
-    Component::factory()->scope('just_next', 1)->create(['configurator_id' => $configurator->id]);
+    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     answer($configuration, $diet, 'vegan');
@@ -145,7 +131,7 @@ it('advances once a step has any answer, even if a descendant still has a valida
     $name = View::factory()->textInput()->childOf($groupOne)->create();
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
     Rule::factory()->validation("answers['{$name->id}'] != null")->create(['view_id' => $name->id]);
-    Component::factory()->scope('just_next', 1)->create(['configurator_id' => $configurator->id]);
+    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     answer($configuration, $groupOne, true);

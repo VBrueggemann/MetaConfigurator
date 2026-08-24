@@ -13,7 +13,7 @@ final class ConfigurationEvaluation
      */
     public function __construct(
         public readonly Configuration $configuration,
-        public readonly array $pendingAnswers,
+        public array $pendingAnswers,
         public array $context = [],
         public array $componentContexts = [],
     ) {}

@@ -83,7 +83,7 @@ it('reveals only the current unanswered step (just_next strategy)', function () 
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
     $name = View::factory()->textInput()->childOf($groupOne)->create();
     Rule::factory()->validation("answers['{$name->id}'] != null")->create(['view_id' => $name->id]);
-    Component::factory()->scope('just_next', 1)->create(['configurator_id' => $configurator->id]);
+    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -98,7 +98,7 @@ it('advances scope to the next step once the current one has any answer', functi
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
-    Component::factory()->scope('just_next', 1)->create(['configurator_id' => $configurator->id]);
+    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     answer($configuration, $groupOne, true);
@@ -113,7 +113,7 @@ it('does not advance scope from a pending answer alone', function () {
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
-    Component::factory()->scope('just_next', 1)->create(['configurator_id' => $configurator->id]);
+    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 

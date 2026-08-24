@@ -73,7 +73,12 @@ class FictionalSurveySeeder extends Seeder
         Rule::factory()->visibility("answers['{$diet->id}'] == 'vegan'")
             ->create(['view_id' => $veganExtras->id]);
 
-        Component::factory()->scope('just_next', depth: 1)
+        Rule::factory()->flow("answers['{$diet->id}'] != null && answers['{$diet->id}'] != 'vegan' && answers['{$general->id}'] == null", $general->id)
+            ->create(['view_id' => $general->id]);
+        Rule::factory()->flow("answers['{$diet->id}'] == 'vegan' && answers['{$veganExtras->id}'] == null", $veganExtras->id)
+            ->create(['view_id' => $veganExtras->id]);
+
+        Component::factory()->scope(depth: 1)
             ->create(['configurator_id' => $configurator->id]);
 
         $this->command?->info('   Configrator: '.route('configurators.play', ['configurator' => $configurator->id]));

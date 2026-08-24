@@ -18,7 +18,7 @@ final class FetchConfigurationState
 
         return app(Pipeline::class)
             ->send($evaluation)
-            ->through([BuildAnswerContext::class, ApplyCalculation::class, ApplyVisibility::class, ApplyValidation::class])
+            ->through([BuildAnswerContext::class, ApplyCalculation::class, ApplyVisibility::class, ApplyBreadcrumbs::class, ApplyFlow::class, ApplyValidation::class])
             ->via('__invoke')
             ->then(fn (ConfigurationEvaluation $evaluation): ConfigurationEvaluation => $evaluation);
     }

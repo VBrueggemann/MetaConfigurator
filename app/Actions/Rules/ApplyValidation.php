@@ -4,6 +4,7 @@ namespace App\Actions\Rules;
 
 use App\Actions\DTO\ConfigurationEvaluation;
 use App\Enums\ComponentType;
+use App\Enums\RuleComponent;
 use App\Models\View;
 use Closure;
 use Illuminate\Support\Collection;
@@ -11,26 +12,29 @@ use Illuminate\Support\Collection;
 final class ApplyValidation
 {
     public function __construct(
-        private readonly EvaluateViewValidity $evaluateViewValidity,
+        private readonly EvaluateRule $evaluateRule
     ) {}
 
     public function __invoke(ConfigurationEvaluation $evaluation, Closure $next): mixed
     {
         $errors = [];
 
-        $visibility = $evaluation->componentContexts[ComponentType::Visibility->value] ?? [];
-        $scopedViews = $evaluation->componentContexts[ComponentType::Scope->value] ?? new Collection;
+        $views = $evaluation->componentContexts[ComponentType::Views->value] ?? new Collection;
 
-        foreach ($scopedViews as $view) {
-            /** @var View $view */
-            if (! ($visibility[$view->id] ?? false)) {
-                continue;
-            }
+        $pendingPaths = $views
+            ->whereIn('id', collect($evaluation->pendingAnswers)->pluck('viewId'))
+            ->pluck('path');
 
-            $viewErrors = ($this->evaluateViewValidity)($view->id, $evaluation->context);
+        $viewsToValidate = $views->filter(
+            fn (View $view) => $pendingPaths->contains(fn (string $pendingPath) => str($pendingPath)->startsWith($view->path))
+        );
 
-            if ($viewErrors !== []) {
-                $errors[$view->id] = $viewErrors;
+        foreach ($viewsToValidate as $view) {
+            $rules = $view->rules->filter(fn ($rule) => $rule->component === RuleComponent::Validation);
+            foreach ($rules as $rule) {
+                if (! ($this->evaluateRule)($rule, $evaluation->context)) {
+                    $errors[$view->id][] = $rule->meta['message'] ?? 'invalid';
+                }
             }
         }
 

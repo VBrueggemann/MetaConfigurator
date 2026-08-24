@@ -62,7 +62,7 @@ it('hides the allergy question for a non-vegan respondent', function () {
 it('shows and requires the allergy question for a vegan respondent', function () {
     answer($this->configuration, $this->diet, 'vegan');
 
-    $evaluation = app(FetchConfigurationState::class)($this->configuration);
+    $evaluation = app(FetchConfigurationState::class)($this->configuration, [new PendingAnswer($this->allergy->id, null)]);
 
     expect($evaluation->componentContexts['visibility'][$this->allergy->id])->toBeTrue();
     expect($evaluation->componentContexts['validation'])->toHaveKey($this->allergy->id);
@@ -108,14 +108,14 @@ it('advances scope to Vegan Extras next, even though it is hidden for a non-vega
 
     app(CommitConfigurationAnswers::class)($this->configuration, [new PendingAnswer($this->general->id, true)]);
 
-    // Scope has no visibility awareness, so it advances to the next unanswered
-    // step regardless of Vegan Extras being hidden for a non-vegan respondent.
+    // Vegan Extras' own Flow rule doesn't match for an omnivore respondent, so the
+    // default (order-based, visibility-blind) fallback is what advances scope here.
     expect(scopeIds(app(FetchConfigurationState::class)($this->configuration)))
         ->toContain($this->veganExtras->id)
         ->not->toContain($this->thankYou->id);
 });
 
-it('advances through General to Vegan Extras in step order, even for a vegan respondent', function () {
+it('advances directly to Vegan Extras for a vegan respondent, skipping General entirely', function () {
     app(CommitConfigurationAnswers::class)($this->configuration, [
         new PendingAnswer($this->aboutYou->id, true),
         new PendingAnswer($this->name->id, 'Ada'),
@@ -124,20 +124,21 @@ it('advances through General to Vegan Extras in step order, even for a vegan res
         new PendingAnswer($this->allergy->id, 'peanuts'),
     ]);
 
-    // Scope steps through General before Vegan Extras purely by order,
-    // regardless of General being hidden for a vegan respondent.
-    expect(scopeIds(app(FetchConfigurationState::class)($this->configuration)))
-        ->toContain($this->general->id)
-        ->not->toContain($this->veganExtras->id);
-
-    app(CommitConfigurationAnswers::class)($this->configuration, [new PendingAnswer($this->general->id, true)]);
-
+    // General carries a Flow rule mirroring its visibility condition, so it never
+    // becomes the current view for a vegan respondent - scope goes straight to
+    // Vegan Extras without ever needing to acknowledge General.
     expect(scopeIds(app(FetchConfigurationState::class)($this->configuration)))
         ->toContain($this->veganExtras->id)
+        ->not->toContain($this->general->id)
         ->not->toContain($this->thankYou->id);
+
+    app(CommitConfigurationAnswers::class)($this->configuration, [new PendingAnswer($this->veganExtras->id, true)]);
+
+    expect(scopeIds(app(FetchConfigurationState::class)($this->configuration)))
+        ->toContain($this->thankYou->id);
 });
 
-it('stays on Thank You once every step, including the hidden one, has been acknowledged', function () {
+it('stays on Thank You once every reachable step has been acknowledged', function () {
     app(CommitConfigurationAnswers::class)($this->configuration, [
         new PendingAnswer($this->aboutYou->id, true),
         new PendingAnswer($this->name->id, 'Ada'),
@@ -145,7 +146,6 @@ it('stays on Thank You once every step, including the hidden one, has been ackno
         ...activityAnswers($this->activityViews, ['hiking']),
     ]);
     app(CommitConfigurationAnswers::class)($this->configuration, [new PendingAnswer($this->general->id, true)]);
-    app(CommitConfigurationAnswers::class)($this->configuration, [new PendingAnswer($this->veganExtras->id, true)]);
     app(CommitConfigurationAnswers::class)($this->configuration, [new PendingAnswer($this->thankYou->id, true)]);
 
     $evaluation = app(FetchConfigurationState::class)($this->configuration);
