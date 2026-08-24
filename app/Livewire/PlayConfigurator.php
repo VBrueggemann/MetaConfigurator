@@ -31,19 +31,19 @@ class PlayConfigurator extends Component
     /** @var array<string, list<string>> */
     public array $fieldErrors = [];
 
+    public $items;
+
     public function mount(Configurator $configurator, GetCurrentConfiguration $getCurrentConfiguration): void
     {
         $this->configurator = $configurator;
         $this->configuration = $getCurrentConfiguration($configurator);
 
         $this->fetch(advanceScope: true);
-        $this->loadValues();
     }
 
     public function updatedValues(): void
     {
         $this->fetch(advanceScope: false);
-        $this->loadValues();
     }
 
     public function next(): void
@@ -68,34 +68,19 @@ class PlayConfigurator extends Component
 
         $this->values = [];
         $this->fetch(advanceScope: true);
-        $this->loadValues();
     }
 
-    /**
-     * @return array<int, ViewModel>
-     */
-    public function items(): array
+    public function items()
     {
-        return ViewModel::query()
-            ->where('configurator_id', $this->configurator->id)
-            ->tree()
-            ->depthFirst()
-            ->get()
-            ->filter(fn (ViewModel $view): bool => in_array($view->id, $this->scopeViewIds, true) && $view->type !== ViewType::Group)
-            ->values()
-            ->all();
+        return $this->items;
     }
 
     private function fetch(bool $advanceScope): void
     {
         $evaluation = app(FetchConfigurationState::class)($this->configuration, $this->toPendingAnswers($this->values));
 
-        $this->visibleViewIds = array_keys(array_filter($evaluation->componentContexts['visibility'] ?? []));
         $this->fieldErrors = $evaluation->componentContexts['validation'] ?? [];
-
-        if ($advanceScope) {
-            $this->scopeViewIds = ($evaluation->componentContexts['scope'] ?? collect())->pluck('id')->all();
-        }
+        $this->items = $evaluation->componentContexts['scope'];
     }
 
     /**
@@ -109,24 +94,6 @@ class PlayConfigurator extends Component
             array_keys($values),
             array_values($values),
         );
-    }
-
-    private function loadValues(): void
-    {
-        $items = $this->items();
-
-        $existing = $this->configuration->answers()
-            ->whereIn('view_id', array_map(fn (ViewModel $item) => $item->id, $items))
-            ->get()
-            ->pluck('value', 'view_id');
-
-        foreach ($items as $item) {
-            if (array_key_exists($item->id, $this->values)) {
-                continue;
-            }
-
-            $this->values[$item->id] = $existing[$item->id] ?? ($item->type === ViewType::Checkbox ? false : null);
-        }
     }
 
     public function render(): ViewContract

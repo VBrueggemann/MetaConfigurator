@@ -3,51 +3,20 @@
 
     <div class="space-y-6">
         @foreach ($items as $item)
-            @continue(! in_array($item->id, $visibleViewIds, true))
-
-            <div wire:key="{{ $item->id }}">
-                @if ($item->type->value === 'html')
-                    <div class="prose prose-sm max-w-none text-gray-700">{!! $item->config['content'] ?? '' !!}</div>
-                @else
-                    <label class="mb-1 block font-medium text-gray-900">{{ $item->config['label'] ?? '' }}</label>
-
-                    @if ($item->type->value === 'text_input')
-                        <input
-                            type="text"
-                            wire:model.live.debounce.500ms="values.{{ $item->id }}"
-                            class="w-full rounded border border-gray-300 px-3 py-2"
-                        />
-                    @elseif ($item->type->value === 'checkbox')
-                        <input
-                            type="checkbox"
-                            wire:model.live="values.{{ $item->id }}"
-                            class="h-4 w-4 rounded border-gray-300"
-                        />
-                    @elseif ($item->type->value === 'select')
-                        <select wire:model.live="values.{{ $item->id }}" class="w-full rounded border border-gray-300 px-3 py-2">
-                            <option value="">—</option>
-                            @foreach ($item->config['options'] ?? [] as $option)
-                                <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
-                            @endforeach
-                        </select>
-                    @endif
-
-                    @if (! empty($fieldErrors[$item->id] ?? null))
-                        <ul class="mt-1 text-sm text-red-600">
-                            @foreach ($fieldErrors[$item->id] as $message)
-                                <li>{{ $message }}</li>
-                            @endforeach
-                        </ul>
-                    @endif
-                @endif
-            </div>
+            @include('livewire.play-configurator.item', ['item' => $item])
         @endforeach
     </div>
 
-    @php($unattachedErrors = collect($fieldErrors)->except(collect($items)->pluck('id')))
+    @dump($fieldErrors)
+    @php
+        $flattenIds = function ($nodes) use (&$flattenIds) {
+            return collect($nodes)->flatMap(fn ($node) => collect([$node->id])->merge($flattenIds($node->children)));
+        };
+        $unattachedErrors = collect($fieldErrors)->except($flattenIds($items));
+    @endphp
     @if ($unattachedErrors->isNotEmpty())
         <ul class="mt-4 text-sm text-red-600">
-            @foreach ($unattachedErrors->flatten() as $message)
+            @foreach ($fieldErrors[$item->id] as $message)
                 <li>{{ $message }}</li>
             @endforeach
         </ul>

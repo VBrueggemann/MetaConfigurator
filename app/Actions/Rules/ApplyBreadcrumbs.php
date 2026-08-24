@@ -13,7 +13,7 @@ final class ApplyBreadcrumbs
 {
     public function __invoke(ConfigurationEvaluation $evaluation, Closure $next): mixed
     {
-        $views = $evaluation->componentContexts[ComponentType::Views->value] ?? new Collection;
+        $views = $evaluation->componentContexts[ComponentType::AnsweredViews->value] ?? new Collection;
 
         $component = Component::query()
             ->where('configurator_id', $evaluation->configuration->configurator_id)

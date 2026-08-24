@@ -8,7 +8,7 @@ enum ComponentType: string
     case Validation = 'validation';
     case Calculation = 'calculation';
     case Scope = 'scope';
-    case Views = 'views';
+    case AnsweredViews = 'answered_views';
     case Breadcrumbs = 'breadcrumbs';
     case PendingViews = 'pending_views';
 }

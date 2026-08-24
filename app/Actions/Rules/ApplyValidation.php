@@ -7,7 +7,6 @@ use App\Enums\ComponentType;
 use App\Enums\RuleComponent;
 use App\Models\View;
 use Closure;
-use Illuminate\Support\Collection;
 
 final class ApplyValidation
 {
@@ -15,31 +14,34 @@ final class ApplyValidation
         private readonly EvaluateRule $evaluateRule
     ) {}
 
+    protected array $errors = [];
+
     public function __invoke(ConfigurationEvaluation $evaluation, Closure $next): mixed
     {
-        $errors = [];
+        $rootView = $evaluation->componentContexts[ComponentType::Scope->value]->first();
+        $pendingViews = $evaluation->componentContexts[ComponentType::PendingViews->value]->pluck('id')->all();
 
-        $views = $evaluation->componentContexts[ComponentType::Views->value] ?? new Collection;
+        if ($rootView) {
+            $this->validate($rootView, $evaluation->context, $pendingViews);
+        }
 
-        $pendingPaths = $views
-            ->whereIn('id', collect($evaluation->pendingAnswers)->pluck('viewId'))
-            ->pluck('path');
+        $evaluation->componentContexts[ComponentType::Validation->value] = $this->errors;
 
-        $viewsToValidate = $views->filter(
-            fn (View $view) => $pendingPaths->contains(fn (string $pendingPath) => str($pendingPath)->startsWith($view->path))
-        );
+        return $next($evaluation);
+    }
 
-        foreach ($viewsToValidate as $view) {
+    private function validate(View $view, array $context, array $pendingViews)
+    {
+        if (in_array($view->id, $pendingViews)) {
             $rules = $view->rules->filter(fn ($rule) => $rule->component === RuleComponent::Validation);
+
             foreach ($rules as $rule) {
-                if (! ($this->evaluateRule)($rule, $evaluation->context)) {
-                    $errors[$view->id][] = $rule->meta['message'] ?? 'invalid';
+                if (! ($this->evaluateRule)($rule, $context)) {
+                    $this->errors[$view->id][] = $rule->meta['message'] ?? 'invalid';
                 }
             }
         }
 
-        $evaluation->componentContexts[ComponentType::Validation->value] = $errors;
-
-        return $next($evaluation);
+        $view->children->each(fn (View $child) => $this->validate($child, $context, $pendingViews));
     }
 }

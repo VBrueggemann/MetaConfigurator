@@ -8,7 +8,6 @@ use App\Enums\RuleComponent;
 use App\Models\Component;
 use App\Models\View;
 use Closure;
-use Illuminate\Support\Collection;
 
 final class ApplyFlow
 {
@@ -18,12 +17,6 @@ final class ApplyFlow
 
     public function __invoke(ConfigurationEvaluation $evaluation, Closure $next): mixed
     {
-        $views = $evaluation->componentContexts[ComponentType::Views->value] ?? new Collection;
-
-        if ($views->isEmpty()) {
-            return $next($evaluation);
-        }
-
         $component = Component::query()
             ->where('configurator_id', $evaluation->configuration->configurator_id)
             ->where('type', ComponentType::Scope)
@@ -31,6 +24,11 @@ final class ApplyFlow
 
         $depth = $component?->config['depth'] ?? 0;
         $answeredViewIds = $evaluation->configuration->answers->pluck('view_id');
+        $rootView = $evaluation->configuration->configurator->rootView;
+
+        $views = $rootView->descendantsAndSelf()->with('rules')->depthFirst()
+            ->whereHas('descendantsAndSelf', fn ($q) => $q->whereIn('id', $answeredViewIds))
+            ->get();
 
         $nextView = null;
 
@@ -53,24 +51,27 @@ final class ApplyFlow
             $lastAnsweredAtDepth = $lastAnsweredView?->ancestorsAndSelf()->whereDepth($depth - (int) $lastAnsweredView->depth)->first();
 
             $nextView = $lastAnsweredAtDepth !== null
-                ? $evaluation->configuration->configurator->rootView->descendantsAndSelf()
+                ? $rootView->descendantsAndSelf()
                     ->whereDepth($depth)
                     ->where('order', $lastAnsweredAtDepth->order + 1)
                     ->first() ?? $lastAnsweredAtDepth
-                : $evaluation->configuration->configurator->rootView->descendantsAndSelf()->whereDepth($depth)->orderBy('order')->first();
+                : $rootView->descendantsAndSelf()->whereDepth($depth)->orderBy('order')->first();
         }
 
-        if ($nextView === null) {
-            return $next($evaluation);
+        if (! $nextView) {
+            $nextView = $rootView;
         }
 
-        $nextView->loadMissing(['bloodline.rules']);
+        $nextView->loadMissing(['bloodline' => fn ($q) => $q->depthFirst(), 'bloodline.rules']);
 
-        $evaluation->componentContexts[ComponentType::Scope->value] = $nextView->bloodline;
+        $evaluation->componentContexts[ComponentType::Scope->value] = $nextView->bloodline->toTree();
+        $evaluation->componentContexts[ComponentType::AnsweredViews->value] = $views;
 
-        $evaluation->componentContexts[ComponentType::PendingViews->value] = collect($evaluation->pendingAnswers)
-            ->filter(fn ($pendingAnswer) => $nextView->bloodline->contains('id', $pendingAnswer->viewId))
-            ->values();
+        $pendingViewPaths = collect($evaluation->pendingAnswers)->pluck('viewId');
+        $pendingViewPaths = $nextView->bloodline->whereIn('id', $pendingViewPaths)->map->path->values()->all();
+
+        $evaluation->componentContexts[ComponentType::PendingViews->value] = $nextView->bloodline
+            ->filter(fn (View $view) => str(implode('|', $pendingViewPaths))->contains($view->id));
 
         return $next($evaluation);
     }

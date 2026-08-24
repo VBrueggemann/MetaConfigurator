@@ -23,7 +23,6 @@ final class CommitConfigurationAnswers
         return app(Pipeline::class)
             ->send($evaluation)
             ->through([CommitAnswers::class])
-            ->via('__invoke')
-            ->then(fn (ConfigurationEvaluation $evaluation): ConfigurationEvaluation => $evaluation);
+            ->thenReturn();
     }
 }
