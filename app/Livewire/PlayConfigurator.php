@@ -11,6 +11,7 @@ use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\View as ViewModel;
 use Illuminate\Contracts\View\View as ViewContract;
+use Illuminate\Support\Collection;
 use Livewire\Component;
 
 class PlayConfigurator extends Component
@@ -31,19 +32,19 @@ class PlayConfigurator extends Component
     /** @var array<string, list<string>> */
     public array $fieldErrors = [];
 
-    public $items;
-
     public function mount(Configurator $configurator, GetCurrentConfiguration $getCurrentConfiguration): void
     {
         $this->configurator = $configurator;
         $this->configuration = $getCurrentConfiguration($configurator);
 
         $this->fetch(advanceScope: true);
+        $this->loadValues();
     }
 
     public function updatedValues(): void
     {
         $this->fetch(advanceScope: false);
+        $this->loadValues();
     }
 
     public function next(): void
@@ -53,7 +54,7 @@ class PlayConfigurator extends Component
             ->where('type', ViewType::Group)
             ->pluck('id');
 
-        $pending = array_filter($this->values, fn (mixed $value): bool => $value !== null);
+        $pending = $this->values;
         foreach ($stepIds as $stepId) {
             $pending[$stepId] = true;
         }
@@ -68,19 +69,67 @@ class PlayConfigurator extends Component
 
         $this->values = [];
         $this->fetch(advanceScope: true);
+        $this->loadValues();
     }
 
+    /**
+     * Rebuilt fresh from scopeViewIds on every render, rather than stored as component state,
+     * since a stored Eloquent tree loses its "children" relation across Livewire's
+     * dehydrate/hydrate cycle, and re-loading it lazily is disabled.
+     *
+     * @return Collection<int, ViewModel>
+     */
     public function items()
     {
-        return $this->items;
+        $views = ViewModel::query()->whereIn('id', $this->scopeViewIds)->orderBy('order')->get()->keyBy('id');
+
+        foreach ($views as $view) {
+            $view->setRelation('children', $views->where('parent_id', $view->id)->values());
+        }
+
+        return $views->whereNull('parent_id')->values();
     }
 
     private function fetch(bool $advanceScope): void
     {
         $evaluation = app(FetchConfigurationState::class)($this->configuration, $this->toPendingAnswers($this->values));
 
+        $this->visibleViewIds = array_keys(array_filter($evaluation->componentContexts['visibility'] ?? []));
         $this->fieldErrors = $evaluation->componentContexts['validation'] ?? [];
-        $this->items = $evaluation->componentContexts['scope'];
+
+        if ($advanceScope) {
+            $this->scopeViewIds = $this->flattenViewIds($evaluation->componentContexts['scope']);
+        }
+    }
+
+    /**
+     * @param  iterable<ViewModel>  $views
+     * @return list<string>
+     */
+    private function flattenViewIds(iterable $views): array
+    {
+        return collect($views)->flatMap(fn (ViewModel $view): array => [$view->id, ...$this->flattenViewIds($view->children)])->all();
+    }
+
+    private function loadValues(): void
+    {
+        $fields = ViewModel::query()
+            ->whereIn('id', array_intersect($this->scopeViewIds, $this->visibleViewIds))
+            ->whereNotIn('type', [ViewType::Group, ViewType::Html])
+            ->get();
+
+        $existing = $this->configuration->answers()
+            ->whereIn('view_id', $fields->pluck('id'))
+            ->get()
+            ->pluck('value', 'view_id');
+
+        foreach ($fields as $field) {
+            if (array_key_exists($field->id, $this->values)) {
+                continue;
+            }
+
+            $this->values[$field->id] = $existing[$field->id] ?? ($field->type === ViewType::Checkbox ? false : null);
+        }
     }
 
     /**

@@ -27,6 +27,7 @@ it('exposes named formula results to expressions via dot access', function () {
 
 it('resolves formulas that reference each other regardless of declaration order', function () {
     $configurator = Configurator::factory()->create();
+    View::factory()->group()->create(['configurator_id' => $configurator->id]);
 
     Component::factory()->calculation([
         'total' => 'calculation.subtotal * 1.1',
@@ -63,6 +64,7 @@ it('lets a visibility rule reference a calculation result', function () {
 
 it('throws a clear error on a circular formula dependency', function () {
     $configurator = Configurator::factory()->create();
+    View::factory()->group()->create(['configurator_id' => $configurator->id]);
 
     Component::factory()->calculation([
         'a' => 'calculation.b + 1',
@@ -72,5 +74,5 @@ it('throws a clear error on a circular formula dependency', function () {
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
     expect(fn () => app(FetchConfigurationState::class)($configuration))
-        ->toThrow(RuntimeException::class);
+        ->toThrow(RuntimeException::class, "Circular calculation dependency involving 'a'.");
 });

@@ -6,7 +6,6 @@ use App\Actions\DTO\ConfigurationEvaluation;
 use App\Enums\ComponentType;
 use App\Enums\RuleComponent;
 use App\Models\Rule;
-use App\Models\View;
 use Closure;
 
 final class ApplyVisibility
@@ -19,31 +18,28 @@ final class ApplyVisibility
     {
         $visibility = [];
 
-        $this->checkChildVisibility($evaluation->componentContexts[ComponentType::Scope->value]->first(), $evaluation->context, $visibility);
+        $rootView = $evaluation->configuration->configurator->rootView;
+
+        // Visibility is computed over the entire view tree, independent of whatever Flow
+        // decided the current scope is - so a Flow-selected "current step" is never dropped
+        // from scope just because it (or an unrelated view elsewhere) happens to be hidden.
+        $views = $rootView === null
+            ? collect()
+            : $rootView->descendantsAndSelf()->with('rules')->depthFirst()->get();
+
+        foreach ($views as $view) {
+            $rules = $view->rules->filter(fn ($rule) => $rule->component === RuleComponent::Visibility);
+
+            $ownRuleVisible = $rules->every(fn (Rule $rule) => ($this->evaluateRule)($rule, $evaluation->context));
+            $parentVisible = $view->parent_id === null || ($visibility[$view->parent_id] ?? false);
+
+            $visibility[$view->id] = $ownRuleVisible && $parentVisible;
+        }
+
+        $evaluation->componentContexts[ComponentType::Visibility->value] = $visibility;
 
         $evaluation->pendingAnswers = collect($evaluation->pendingAnswers)->filter(fn ($answer) => $visibility[$answer->viewId] ?? false)->values()->toArray();
 
         return $next($evaluation);
-    }
-
-    private function checkChildVisibility(View $view, array $context, array &$visibility): bool
-    {
-        $rules = $view->rules->filter(fn ($rule) => $rule->component === RuleComponent::Visibility);
-
-        $visible = $rules->every(fn (Rule $rule) => ($this->evaluateRule)($rule, $context));
-        $visibility[$view->id] = $visible;
-
-        if (! $visible) {
-            return false;
-        }
-
-        $childVisibility = [];
-        $view->children->each(function (View $child) use ($context, &$visibility, &$childVisibility) {
-            $childVisibility[$child->id] = $this->checkChildVisibility($child, $context, $visibility);
-        });
-
-        $view->setRelation('children', $view->children->filter(fn (View $child) => $childVisibility[$child->id])->values());
-
-        return true;
     }
 }

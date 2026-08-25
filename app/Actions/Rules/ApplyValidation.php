@@ -20,9 +20,10 @@ final class ApplyValidation
     {
         $rootView = $evaluation->componentContexts[ComponentType::Scope->value]->first();
         $pendingViews = $evaluation->componentContexts[ComponentType::PendingViews->value]->pluck('id')->all();
+        $visibility = $evaluation->componentContexts[ComponentType::Visibility->value] ?? [];
 
         if ($rootView) {
-            $this->validate($rootView, $evaluation->context, $pendingViews);
+            $this->validate($rootView, $evaluation->context, $pendingViews, $visibility);
         }
 
         $evaluation->componentContexts[ComponentType::Validation->value] = $this->errors;
@@ -30,9 +31,12 @@ final class ApplyValidation
         return $next($evaluation);
     }
 
-    private function validate(View $view, array $context, array $pendingViews)
+    /**
+     * @param  array<string, bool>  $visibility
+     */
+    private function validate(View $view, array $context, array $pendingViews, array $visibility)
     {
-        if (in_array($view->id, $pendingViews)) {
+        if (($visibility[$view->id] ?? true) && in_array($view->id, $pendingViews)) {
             $rules = $view->rules->filter(fn ($rule) => $rule->component === RuleComponent::Validation);
 
             foreach ($rules as $rule) {
@@ -42,6 +46,6 @@ final class ApplyValidation
             }
         }
 
-        $view->children->each(fn (View $child) => $this->validate($child, $context, $pendingViews));
+        $view->children->each(fn (View $child) => $this->validate($child, $context, $pendingViews, $visibility));
     }
 }

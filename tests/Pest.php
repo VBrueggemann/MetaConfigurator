@@ -62,5 +62,9 @@ function answer(Configuration $configuration, View $view, mixed $value): Answer
  */
 function scopeIds(ConfigurationEvaluation $evaluation): array
 {
-    return $evaluation->componentContexts['scope']->pluck('id')->all();
+    $flatten = function ($views) use (&$flatten): array {
+        return collect($views)->flatMap(fn ($view) => [$view->id, ...$flatten($view->children)])->all();
+    };
+
+    return $flatten($evaluation->componentContexts['scope']);
 }

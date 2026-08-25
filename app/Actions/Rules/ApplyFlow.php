@@ -26,9 +26,9 @@ final class ApplyFlow
         $answeredViewIds = $evaluation->configuration->answers->pluck('view_id');
         $rootView = $evaluation->configuration->configurator->rootView;
 
-        $views = $rootView->descendantsAndSelf()->with('rules')->depthFirst()
-            ->whereHas('descendantsAndSelf', fn ($q) => $q->whereIn('id', $answeredViewIds))
-            ->get();
+        $views = $rootView->descendantsAndSelf()->with('rules')->depthFirst()->get();
+
+        $flowContext = ['answers' => $evaluation->context['persistedAnswers'] ?? []] + $evaluation->context;
 
         $nextView = null;
 
@@ -39,7 +39,7 @@ final class ApplyFlow
 
             $flowRule = $view->rules->first(fn ($rule) => $rule->component === RuleComponent::Flow);
 
-            if ($flowRule !== null && ($this->evaluateRule)($flowRule, $evaluation->context)) {
+            if ($flowRule !== null && ($this->evaluateRule)($flowRule, $flowContext)) {
                 $nextView = $views->find($flowRule->meta['view_id']);
 
                 break;

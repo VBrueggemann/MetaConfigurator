@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\ViewType;
 use App\Livewire\PlayConfigurator;
 use App\Models\Answer;
 use App\Models\Configuration;
@@ -17,19 +16,13 @@ beforeEach(function () {
     $root = $this->configurator->rootView;
     $groups = View::where('parent_id', $root->id)->orderBy('order')->get();
     $this->aboutYou = $groups[0];
-    $this->general = $groups[1];
-    $this->veganExtras = $groups[2];
-    $this->thankYou = $groups[3];
+    $this->normalEnd = $groups[1];
+    $this->allergyEnd = $groups[2];
 
     $items = View::where('configurator_id', $this->configurator->id)->where('parent_id', $this->aboutYou->id)->orderBy('order')->get();
     $this->name = $items[0];
     $this->diet = $items[1];
-    $this->activities = $items[2];
-    $this->allergy = $items[3];
-
-    $activityItems = View::where('parent_id', $this->activities->id)->where('type', ViewType::Checkbox)->orderBy('order')->get();
-    $this->hiking = $activityItems[0];
-    $this->cooking = $activityItems[3];
+    $this->allergy = $items[2];
 });
 
 it('starts a new Configuration on first visit and remembers it across a fresh visit', function () {
@@ -79,64 +72,47 @@ it('does not advance scope on live edits, only on an explicit commit', function 
 
     expect($component->get('scopeViewIds'))
         ->toContain($this->aboutYou->id)
-        ->not->toContain($this->veganExtras->id);
+        ->not->toContain($this->normalEnd->id)
+        ->not->toContain($this->allergyEnd->id);
     expect($component->get('visibleViewIds'))
-        ->toContain($this->activities->id)
         ->toContain($this->allergy->id);
 });
 
-it('walks a non-vegan respondent to Vegan Extras, acknowledging General on a second click', function () {
+it('advances to the normal ending for a respondent without an allergy', function () {
     $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator])
         ->set("values.{$this->name->id}", 'Ada')
         ->set("values.{$this->diet->id}", 'omnivore')
-        ->set("values.{$this->hiking->id}", true)
         ->call('next');
 
     expect($component->get('scopeViewIds'))
-        ->toContain($this->general->id)
-        ->not->toContain($this->veganExtras->id);
-
-    $component->call('next');
-
-    expect($component->get('scopeViewIds'))
-        ->toContain($this->veganExtras->id)
-        ->not->toContain($this->general->id);
+        ->toContain($this->normalEnd->id)
+        ->not->toContain($this->allergyEnd->id);
 });
 
-it('walks a vegan respondent to Thank You, skipping General and acknowledging Vegan Extras on a second click', function () {
+it('advances to the allergy ending for a vegan respondent with an allergy', function () {
     $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator])
         ->set("values.{$this->name->id}", 'Ada')
         ->set("values.{$this->diet->id}", 'vegan')
-        ->set("values.{$this->cooking->id}", true)
         ->set("values.{$this->allergy->id}", 'peanuts')
         ->call('next');
 
     expect($component->get('scopeViewIds'))
-        ->toContain($this->veganExtras->id)
-        ->not->toContain($this->general->id)
-        ->not->toContain($this->thankYou->id);
-
-    $component->call('next');
-
-    expect($component->get('scopeViewIds'))
-        ->toContain($this->thankYou->id)
-        ->not->toContain($this->veganExtras->id);
+        ->toContain($this->allergyEnd->id)
+        ->not->toContain($this->normalEnd->id);
 });
 
-it('shows the activities count error when clicking Next with zero activities checked', function () {
+it('shows a diet validation error when clicking Next without a diet', function () {
     $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator])
         ->set("values.{$this->name->id}", 'Ada')
-        ->set("values.{$this->diet->id}", 'omnivore')
         ->call('next');
 
-    $component->assertSee('Choose at least one activity.');
+    $component->assertSee('Please tell us your diet.');
 });
 
 it('renders the next screen and persists answers after a fully valid commit', function () {
     $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator])
         ->set("values.{$this->name->id}", 'Ada')
         ->set("values.{$this->diet->id}", 'omnivore')
-        ->set("values.{$this->hiking->id}", true)
         ->call('next');
 
     $component->assertDontSee('What is your name?');

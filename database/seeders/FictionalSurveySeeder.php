@@ -41,9 +41,9 @@ class FictionalSurveySeeder extends Seeder
         Rule::factory()->validation("answers['{$allergy->id}'] != null && strlen(answers['{$allergy->id}']) > 0")
             ->create(['view_id' => $allergy->id, 'meta' => ['message' => 'Please tell us about your allergy.']]);
 
-        Rule::factory()->flow("answers['{$allergy->id}'] == null", $aboutYou->id)
+        Rule::factory()->flow("answers['{$aboutYou->id}'] != null && answers['{$allergy->id}'] == null", $normalEnd->id)
             ->create(['view_id' => $normalEnd->id]);
-        Rule::factory()->flow("answers['{$allergy->id}'] != null", $aboutYou->id)
+        Rule::factory()->flow("answers['{$aboutYou->id}'] != null && answers['{$allergy->id}'] != null", $allergyEnd->id)
             ->create(['view_id' => $allergyEnd->id]);
 
         Component::factory()->scope(depth: 1)

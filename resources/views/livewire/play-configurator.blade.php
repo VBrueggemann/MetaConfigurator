@@ -3,11 +3,12 @@
 
     <div class="space-y-6">
         @foreach ($items as $item)
-            @include('livewire.play-configurator.item', ['item' => $item])
+            @if (in_array($item->id, $visibleViewIds, true))
+                @include('livewire.play-configurator.item', ['item' => $item])
+            @endif
         @endforeach
     </div>
 
-    @dump($fieldErrors)
     @php
         $flattenIds = function ($nodes) use (&$flattenIds) {
             return collect($nodes)->flatMap(fn ($node) => collect([$node->id])->merge($flattenIds($node->children)));
