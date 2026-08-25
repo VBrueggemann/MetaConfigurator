@@ -4,26 +4,20 @@ namespace App\Actions\Rules;
 
 use App\Actions\DTO\ConfigurationEvaluation;
 use App\Enums\ComponentType;
-use App\Models\Component;
 use App\Models\View;
 use Closure;
-use Illuminate\Support\Collection;
 
 final class ApplyBreadcrumbs
 {
     public function __invoke(ConfigurationEvaluation $evaluation, Closure $next): mixed
     {
-        $views = $evaluation->componentContexts[ComponentType::AnsweredViews->value] ?? new Collection;
+        $chunks = $evaluation->configuration->relevantAnswerChunks;
 
-        $component = Component::query()
-            ->where('configurator_id', $evaluation->configuration->configurator_id)
-            ->where('type', ComponentType::Scope)
-            ->first();
+        $anchorViewsById = View::query()->whereIn('id', $chunks->pluck('anchor_view_id'))->get()->keyBy('id');
 
-        $depth = $component?->config['depth'] ?? 0;
-
-        $evaluation->componentContexts[ComponentType::Breadcrumbs->value] = $views
-            ->filter(fn (View $view) => (int) $view->depth < $depth)
+        $evaluation->componentContexts[ComponentType::Breadcrumbs->value] = $chunks
+            ->map(fn ($chunk) => $anchorViewsById->get($chunk->anchor_view_id))
+            ->filter()
             ->values();
 
         return $next($evaluation);

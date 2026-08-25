@@ -1,7 +1,9 @@
 <?php
 
 use App\Actions\DTO\ConfigurationEvaluation;
+use App\Enums\ViewType;
 use App\Models\Answer;
+use App\Models\AnswerChunk;
 use App\Models\Configuration;
 use App\Models\View;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -48,11 +50,22 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function answer(Configuration $configuration, View $view, mixed $value): Answer
+function answer(Configuration $configuration, View $view, mixed $value): ?Answer
 {
+    $chunk = AnswerChunk::factory()->create([
+        'configuration_id' => $configuration->id,
+        'anchor_view_id' => $view->id,
+        'sequence' => $configuration->answerChunks()->max('sequence') + 1,
+    ]);
+
+    if ($view->type !== ViewType::Input) {
+        return null;
+    }
+
     return Answer::factory()->create([
         'configuration_id' => $configuration->id,
         'view_id' => $view->id,
+        'answer_chunk_id' => $chunk->id,
         'value' => $value,
     ]);
 }

@@ -12,11 +12,11 @@ final class FetchConfigurationState
     /**
      * @param  array<int, PendingAnswer>  $pendingAnswers
      */
-    public function __invoke(Configuration $configuration, array $pendingAnswers = []): ConfigurationEvaluation
+    public function __invoke(Configuration $configuration, array $pendingAnswers = [], ?string $anchorViewId = null): ConfigurationEvaluation
     {
-        $evaluation = new ConfigurationEvaluation($configuration, $pendingAnswers);
+        $evaluation = new ConfigurationEvaluation($configuration, $pendingAnswers, anchorViewId: $anchorViewId);
 
-        $configuration->load('answers');
+        $configuration->load(['relevantAnswers', 'relevantAnswerChunks']);
         $configuration->loadMissing('configurator.rootView');
 
         if (! $configuration->configurator->rootView) {
@@ -25,7 +25,7 @@ final class FetchConfigurationState
 
         return app(Pipeline::class)
             ->send($evaluation)
-            ->through([BuildAnswerContext::class, ApplyCalculation::class, ApplyFlow::class, ApplyVisibility::class, ApplyValidation::class, ApplyBreadcrumbs::class])
+            ->through([GuardAnchorOverride::class, BuildAnswerContext::class, ApplyCalculation::class, ApplyFlow::class, ApplyVisibility::class, ApplyValidation::class, ApplyBreadcrumbs::class])
             ->thenReturn();
     }
 }

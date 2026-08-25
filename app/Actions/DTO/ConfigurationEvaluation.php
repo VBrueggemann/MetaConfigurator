@@ -16,5 +16,6 @@ final class ConfigurationEvaluation
         public array $pendingAnswers,
         public array $context = [],
         public array $componentContexts = [],
+        public ?string $anchorViewId = null,
     ) {}
 }

@@ -17,7 +17,9 @@ final class BuildAnswerContext
             ? collect()
             : $rootView->descendantsAndSelf()->pluck('id')->mapWithKeys(fn (string $viewId): array => [$viewId => null]);
 
-        $persistedAnswers = $unansweredByViewId->merge($configuration->answers->pluck('value', 'view_id'));
+        $persistedAnswers = $unansweredByViewId
+            ->merge($configuration->relevantAnswerChunks->pluck('anchor_view_id')->mapWithKeys(fn (string $viewId): array => [$viewId => true]))
+            ->merge($configuration->relevantAnswers->pluck('value', 'view_id'));
 
         $evaluation->context['persistedAnswers'] = $persistedAnswers->all();
 

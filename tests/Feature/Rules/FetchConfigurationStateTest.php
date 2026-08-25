@@ -108,6 +108,36 @@ it('advances scope to the next step once the current one has any answer', functi
     expect(scopeIds($evaluation))->toEqualCanonicalizing([$root->id, $groupTwo->id]);
 });
 
+it('anchors scope at an explicitly requested view instead of the computed next step', function () {
+    $configurator = Configurator::factory()->create();
+    $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
+    $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
+    Component::factory()->scope(depth: 1)->create(['configurator_id' => $configurator->id]);
+
+    $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
+    answer($configuration, $groupOne, true);
+    answer($configuration, $groupTwo, true);
+
+    $evaluation = app(FetchConfigurationState::class)($configuration, [], $groupOne->id);
+
+    expect($evaluation->anchorViewId)->toBe($groupOne->id);
+});
+
+it('ignores a requested anchor that is not an existing relevant chunk, falling back to the computed next step', function () {
+    $configurator = Configurator::factory()->create();
+    $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
+    $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
+    Component::factory()->scope(depth: 1)->create(['configurator_id' => $configurator->id]);
+
+    $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
+
+    $evaluation = app(FetchConfigurationState::class)($configuration, [], $groupTwo->id);
+
+    expect($evaluation->anchorViewId)->toBe($groupOne->id);
+});
+
 it('does not advance scope from a pending answer alone', function () {
     $configurator = Configurator::factory()->create();
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);

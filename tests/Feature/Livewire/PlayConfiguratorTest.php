@@ -2,6 +2,7 @@
 
 use App\Livewire\PlayConfigurator;
 use App\Models\Answer;
+use App\Models\Component;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\View;
@@ -118,6 +119,79 @@ it('renders the next screen and persists answers after a fully valid commit', fu
     $component->assertDontSee('What is your name?');
     $component->assertSee('Thanks!', false);
     expect(Answer::count())->toBeGreaterThan(0);
+});
+
+it('allows returning to an earlier step, editing an answer, and re-committing changes the outcome', function () {
+    $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator])
+        ->set("values.{$this->name->id}", 'Ada')
+        ->set("values.{$this->diet->id}", 'omnivore')
+        ->call('next');
+
+    expect($component->get('scopeViewIds'))->toContain($this->normalEnd->id);
+
+    $component->call('goToView', $this->aboutYou->id);
+
+    expect($component->get('scopeViewIds'))->toContain($this->aboutYou->id);
+    expect($component->get('values')[$this->name->id])->toBe('Ada');
+
+    $component->set("values.{$this->diet->id}", 'vegan')
+        ->set("values.{$this->allergy->id}", 'peanuts')
+        ->call('next');
+
+    expect($component->get('scopeViewIds'))
+        ->toContain($this->allergyEnd->id)
+        ->not->toContain($this->normalEnd->id);
+});
+
+it('does not advance away from a manually revisited step on live edits', function () {
+    $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator])
+        ->set("values.{$this->name->id}", 'Ada')
+        ->set("values.{$this->diet->id}", 'omnivore')
+        ->call('next')
+        ->call('goToView', $this->aboutYou->id)
+        ->set("values.{$this->diet->id}", 'vegan');
+
+    expect($component->get('scopeViewIds'))
+        ->toContain($this->aboutYou->id)
+        ->not->toContain($this->normalEnd->id)
+        ->not->toContain($this->allergyEnd->id);
+});
+
+it('prefills a superseded step field with its stale answer instead of the static config default', function () {
+    $configurator = Configurator::factory()->create();
+    $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $stepOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
+    $fieldOne = View::factory()->textInput('Field one')->childOf($stepOne)->create(['order' => 0]);
+    $stepTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
+    $fieldTwo = View::factory()->textInput('Field two')->childOf($stepTwo)->create(['order' => 0]);
+    Component::factory()->scope(depth: 1)->create(['configurator_id' => $configurator->id]);
+
+    $component = Livewire::test(PlayConfigurator::class, ['configurator' => $configurator])
+        ->set("values.{$fieldOne->id}", 'first answer')
+        ->call('next')
+        ->set("values.{$fieldTwo->id}", 'second answer')
+        ->call('next')
+        ->call('goToView', $stepOne->id)
+        ->set("values.{$fieldOne->id}", 'changed answer')
+        ->call('next');
+
+    expect($component->get('values')[$fieldTwo->id])->toBe('second answer');
+});
+
+it('renders a clickable breadcrumb for each already-answered step', function () {
+    $configurator = Configurator::factory()->create();
+    $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $stepOne = View::factory()->group('Step One')->childOf($root)->create(['order' => 0]);
+    $fieldOne = View::factory()->textInput('Field one')->childOf($stepOne)->create(['order' => 0]);
+    View::factory()->group('Step Two')->childOf($root)->create(['order' => 1]);
+    Component::factory()->scope(depth: 1)->create(['configurator_id' => $configurator->id]);
+
+    $component = Livewire::test(PlayConfigurator::class, ['configurator' => $configurator])
+        ->set("values.{$fieldOne->id}", 'answer')
+        ->call('next');
+
+    $component->assertSee('Step One');
+    $component->assertSeeHtml("wire:click=\"goToView('{$stepOne->id}')\"");
 });
 
 it('does not name a public action after one of Livewire\'s reserved $wire magic actions', function () {

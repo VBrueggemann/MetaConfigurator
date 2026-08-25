@@ -25,4 +25,19 @@ class Configuration extends Model
     {
         return $this->hasMany(Answer::class);
     }
+
+    public function relevantAnswers(): HasMany
+    {
+        return $this->hasMany(Answer::class)->whereHas('answerChunk', fn ($query) => $query->where('relevant', true));
+    }
+
+    public function answerChunks(): HasMany
+    {
+        return $this->hasMany(AnswerChunk::class);
+    }
+
+    public function relevantAnswerChunks(): HasMany
+    {
+        return $this->hasMany(AnswerChunk::class)->withAttributes(['relevant' => true])->orderBy('sequence');
+    }
 }

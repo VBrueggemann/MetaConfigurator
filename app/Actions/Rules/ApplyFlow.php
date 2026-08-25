@@ -23,26 +23,29 @@ final class ApplyFlow
             ->first();
 
         $depth = $component?->config['depth'] ?? 0;
-        $answeredViewIds = $evaluation->configuration->answers->pluck('view_id');
+        $answeredViewIds = $evaluation->configuration->relevantAnswers->pluck('view_id')
+            ->merge($evaluation->configuration->relevantAnswerChunks->pluck('anchor_view_id'));
         $rootView = $evaluation->configuration->configurator->rootView;
 
         $views = $rootView->descendantsAndSelf()->with('rules')->depthFirst()->get();
 
         $flowContext = ['answers' => $evaluation->context['persistedAnswers'] ?? []] + $evaluation->context;
 
-        $nextView = null;
+        $nextView = $evaluation->anchorViewId !== null ? $views->find($evaluation->anchorViewId) : null;
 
-        foreach ($views->reverse() as $view) {
-            if ((int) $view->depth > $depth) {
-                continue;
-            }
+        if (! $nextView) {
+            foreach ($views->reverse() as $view) {
+                if ((int) $view->depth > $depth) {
+                    continue;
+                }
 
-            $flowRule = $view->rules->first(fn ($rule) => $rule->component === RuleComponent::Flow);
+                $flowRule = $view->rules->first(fn ($rule) => $rule->component === RuleComponent::Flow);
 
-            if ($flowRule !== null && ($this->evaluateRule)($flowRule, $flowContext)) {
-                $nextView = $views->find($flowRule->meta['view_id']);
+                if ($flowRule !== null && ($this->evaluateRule)($flowRule, $flowContext)) {
+                    $nextView = $views->find($flowRule->meta['view_id']);
 
-                break;
+                    break;
+                }
             }
         }
 
@@ -64,8 +67,8 @@ final class ApplyFlow
 
         $nextView->loadMissing(['bloodline' => fn ($q) => $q->depthFirst(), 'bloodline.rules']);
 
+        $evaluation->anchorViewId = $nextView->id;
         $evaluation->componentContexts[ComponentType::Scope->value] = $nextView->bloodline->toTree();
-        $evaluation->componentContexts[ComponentType::AnsweredViews->value] = $views;
 
         $pendingViewPaths = collect($evaluation->pendingAnswers)->pluck('viewId');
         $pendingViewPaths = $nextView->bloodline->whereIn('id', $pendingViewPaths)->map->path->values()->all();

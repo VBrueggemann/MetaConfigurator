@@ -4,7 +4,6 @@ namespace App\Actions\Rules;
 
 use App\Actions\DTO\ConfigurationEvaluation;
 use App\Enums\ComponentType;
-use App\Models\Answer;
 use Closure;
 use Illuminate\Support\Facades\DB;
 
@@ -17,11 +16,19 @@ final class CommitAnswers
         }
 
         DB::transaction(function () use ($evaluation) {
+            $sequence = $evaluation->configuration->answerChunks()->max('sequence') + 1;
+
+            $chunk = $evaluation->configuration->relevantAnswerChunks()->create([
+                'anchor_view_id' => $evaluation->anchorViewId,
+                'sequence' => $sequence,
+            ]);
+
             foreach ($evaluation->pendingAnswers as $pendingAnswer) {
-                Answer::updateOrCreate(
-                    ['configuration_id' => $evaluation->configuration->id, 'view_id' => $pendingAnswer->viewId],
-                    ['value' => $pendingAnswer->value],
-                );
+                $chunk->answers()->create([
+                    'configuration_id' => $evaluation->configuration->id,
+                    'view_id' => $pendingAnswer->viewId,
+                    'value' => $pendingAnswer->value,
+                ]);
             }
         });
 

@@ -16,13 +16,13 @@ final class CommitConfigurationAnswers
     /**
      * @param  array<int, PendingAnswer>  $pendingAnswers
      */
-    public function __invoke(Configuration $configuration, array $pendingAnswers): ConfigurationEvaluation
+    public function __invoke(Configuration $configuration, array $pendingAnswers, ?string $anchorViewId = null): ConfigurationEvaluation
     {
-        $evaluation = ($this->fetchConfigurationState)($configuration, $pendingAnswers);
+        $evaluation = ($this->fetchConfigurationState)($configuration, $pendingAnswers, $anchorViewId);
 
         return app(Pipeline::class)
             ->send($evaluation)
-            ->through([CommitAnswers::class])
+            ->through([SupersedeAnswerChunks::class, CommitAnswers::class])
             ->thenReturn();
     }
 }

@@ -19,3 +19,6 @@ PHPDoc tags (`@param`, `@return`, `@var`, `@throws`, etc.) must not carry a trai
 
 ## Prefer global helpers over facades or direct class instantiation
 Use Laravel's global helper functions instead of the equivalent facade or `new`'d class where one exists, e.g. `collect()` not `new Collection` / `Collection::make()`, `now()` not `Carbon::now()`, `app()` not `App::make()`, `response()` not `Response::make()`. Keeps call sites terse and consistent with the rest of the codebase. Only reach for the facade/class directly when no helper covers the needed API (e.g. a specific Collection method not exposed as a helper, or when you need the class name for a type hint).
+
+## No comments in code, not even non-obvious WHY ones
+This file's general "only WHY comments" guidance is superseded for this project: the user has explicitly asked for zero comments in code, including a justified non-obvious-WHY explanation for a real bug workaround (a Livewire <select multiple> quirk). Default to no comments at all — put explanations in the PR/commit description or chat response instead.

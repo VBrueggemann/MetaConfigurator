@@ -12,7 +12,7 @@ class FictionalSurveySeeder extends Seeder
 {
     public function run(): void
     {
-        $configurator = Configurator::factory()->create(['name' => 'Dinner Party Survey']);
+        $configurator = Configurator::factory()->create(['name' => 'Dinner Party Survey', 'slug' => 'dinner-party-survey']);
 
         $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
 
@@ -49,6 +49,6 @@ class FictionalSurveySeeder extends Seeder
         Component::factory()->scope(depth: 1)
             ->create(['configurator_id' => $configurator->id]);
 
-        $this->command?->info('   Configrator: '.route('configurators.play', ['configurator' => $configurator->id]));
+        $this->command?->info('   Configrator: '.route('configurators.play', ['configurator' => $configurator]));
     }
 }

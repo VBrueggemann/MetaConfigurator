@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Answer;
+use App\Models\AnswerChunk;
 use App\Models\Configuration;
 use App\Models\View;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -22,6 +23,7 @@ class AnswerFactory extends Factory
         return [
             'configuration_id' => Configuration::factory(),
             'view_id' => View::factory(),
+            'answer_chunk_id' => AnswerChunk::factory(),
             'value' => fake()->word(),
         ];
     }

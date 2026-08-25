@@ -1,0 +1,15 @@
+---
+paths:
+  - app/Livewire/PlayConfigurator.php
+---
+
+# Livewire
+
+## View widgets are config-driven, not type-driven
+ViewType is only {Group, Input, Display} — a family/dispatch key, not a control type. Which control an Input renders as (text/checkbox/select/color/date/email/number/radio/range/datalist) lives in config['widget'], an open-ended string, and item.blade.php dispatches to resources/views/livewire/play-configurator/widgets/{widget}.blade.php by naming convention — one partial per widget, never an if/elseif chain. A field's default value is the explicit config['default'] (author-set), not inferred from the widget name. PlayConfigurator/backend code must never branch on a specific widget name (e.g. checking for 'checkbox') — that knowledge was deliberately removed from the backend so it stays widget-agnostic; new widgets should only ever require a new config['widget'] value + a new Blade partial.
+
+## Group multiselect: children keep independent answers
+A Group with config['widget']='multiselect' renders one <select multiple> whose <option>s are its children, but each child still gets its own independent scalar Answer — the Group itself never has a directly-attached Answer. updatedGroupSelections() must not trust its own arguments: Livewire's <select multiple> binding can deliver a bare scalar instead of an array, or a granular per-index dotted path (groupSelections.{groupId}.0) that corrupts $groupId with a trailing '.0' (breaks the ->find($groupId) UUID lookup). Always strip anything from the first '.' in $groupId (UUIDs never contain dots) and read the authoritative selection from $this->groupSelections[$groupId] — already correctly hydrated by Livewire before the hook fires — rather than the raw hook argument.
+
+## goToView()/back() pin scope via $requestedAnchorViewId, not a separate mechanism
+Going back to an already-answered step reuses the same `fetch(bool $advanceScope)` machinery that already keeps scope fixed across live edits — there is no separate "navigation mode". `goToView()` sets `$this->requestedAnchorViewId` (also clears `$values`/`groupSelections` so stale fields from the step being left don't leak into the next commit) and calls `fetch(advanceScope: true)`; every subsequent `fetch()` call — including the ones triggered by live edits via `updatedValues()`/`updatedGroupSelections()` — must keep passing `$this->requestedAnchorViewId` through to `FetchConfigurationState`, or a live edit while revisiting a step would silently jump scope back to wherever forward computation naturally leads. `next()` clears `$this->requestedAnchorViewId` right after a successful commit so forward flow resumes normally. Don't add a second, parallel "current view" property for this — it belongs on the one property already threaded everywhere `anchorViewId` matters. `back()` finds the previous chunk via `relevantAnswerChunks()->reorder('sequence', 'desc')` — see the models rule on why a plain `orderByDesc` there silently returns the wrong end of the list.

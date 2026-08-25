@@ -3,6 +3,7 @@
 use App\Actions\DTO\ConfigurationEvaluation;
 use App\Actions\DTO\PendingAnswer;
 use App\Actions\Rules\BuildAnswerContext;
+use App\Actions\Rules\CommitConfigurationAnswers;
 use App\Actions\Rules\FetchConfigurationState;
 use App\Models\Answer;
 use App\Models\Component;
@@ -88,22 +89,24 @@ it('reveals the entire tree when depth is 0', function () {
     expect(scopeIds($evaluation))->toContain($section->id, $subsection->id, $question->id);
 });
 
-it('loads every view shallower than the configured depth into breadcrumbs', function () {
+it('lists already-answered steps as breadcrumbs, in the order they were answered', function () {
     $configurator = Configurator::factory()->create();
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
+    $groupThree = View::factory()->group()->childOf($root)->create(['order' => 2]);
     Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
-    answer($configuration, $groupOne, true);
+    app(CommitConfigurationAnswers::class)($configuration, []);
+    app(CommitConfigurationAnswers::class)($configuration, []);
 
     $evaluation = app(FetchConfigurationState::class)($configuration);
 
+    expect($evaluation->componentContexts['breadcrumbs']->pluck('id')->all())
+        ->toBe([$groupOne->id, $groupTwo->id]);
     expect($evaluation->componentContexts['breadcrumbs']->pluck('id'))
-        ->toContain($root->id)
-        ->not->toContain($groupOne->id)
-        ->not->toContain($groupTwo->id);
+        ->not->toContain($groupThree->id, $root->id);
 });
 
 it('does not skip a step hidden by a visibility rule, since only Flow rules affect the next view', function () {

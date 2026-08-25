@@ -1,6 +1,31 @@
 <div class="mx-auto max-w-xl p-6">
     <h1 class="mb-6 text-xl font-semibold text-gray-900">{{ $configurator->name }}</h1>
 
+    @if ($breadcrumbs->isNotEmpty())
+        <nav class="mb-6 flex flex-wrap items-center gap-2 text-sm text-gray-600">
+            @foreach ($breadcrumbs as $breadcrumb)
+                <button
+                    type="button"
+                    wire:click="goToView('{{ $breadcrumb->id }}')"
+                    class="underline hover:text-blue-600"
+                >
+                    {{ $breadcrumb->config['label'] ?? 'Step '.$loop->iteration }}
+                </button>
+                @unless ($loop->last)
+                    <span aria-hidden="true">&rsaquo;</span>
+                @endunless
+            @endforeach
+        </nav>
+
+        <button
+            type="button"
+            wire:click="back"
+            class="mb-6 text-sm text-gray-600 underline hover:text-blue-600"
+        >
+            Back
+        </button>
+    @endif
+
     <div class="space-y-6">
         @foreach ($items as $item)
             @if (in_array($item->id, $visibleViewIds, true))

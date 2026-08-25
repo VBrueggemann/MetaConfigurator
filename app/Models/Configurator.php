@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Str;
 
 class Configurator extends Model
 {
@@ -14,7 +15,32 @@ class Configurator extends Model
 
     protected $fillable = [
         'name',
+        'slug',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Configurator $configurator): void {
+            $configurator->slug ??= static::uniqueSlugFor($configurator->name);
+        });
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'slug';
+    }
+
+    private static function uniqueSlugFor(string $name): string
+    {
+        $base = Str::slug($name);
+        $slug = $base;
+
+        for ($suffix = 2; static::query()->where('slug', $slug)->exists(); $suffix++) {
+            $slug = "{$base}-{$suffix}";
+        }
+
+        return $slug;
+    }
 
     public function views(): HasMany
     {

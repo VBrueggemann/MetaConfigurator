@@ -15,10 +15,10 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->foreignUuid('configuration_id')->constrained()->cascadeOnDelete();
             $table->foreignUuid('view_id')->constrained('views')->cascadeOnDelete();
-            $table->json('value');
+            $table->foreignUuid('answer_chunk_id')->constrained('answer_chunks')->cascadeOnDelete();
+            $table->jsonb('value')->nullable();
             $table->timestamps();
 
-            $table->unique(['configuration_id', 'view_id']);
             $table->index('view_id');
         });
     }

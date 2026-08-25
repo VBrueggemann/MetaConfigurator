@@ -14,6 +14,7 @@ class Answer extends Model
     protected $fillable = [
         'configuration_id',
         'view_id',
+        'answer_chunk_id',
         'value',
     ];
 
@@ -29,5 +30,10 @@ class Answer extends Model
     public function view(): BelongsTo
     {
         return $this->belongsTo(View::class);
+    }
+
+    public function answerChunk(): BelongsTo
+    {
+        return $this->belongsTo(AnswerChunk::class);
     }
 }
