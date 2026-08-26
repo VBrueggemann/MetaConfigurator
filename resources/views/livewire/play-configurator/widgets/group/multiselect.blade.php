@@ -4,8 +4,6 @@
     class="w-full rounded border border-gray-300 px-3 py-2"
 >
     @foreach ($item->children as $child)
-        @if (in_array($child->id, $visibleViewIds, true))
-            <option value="{{ $child->id }}" @selected($values[$child->id] ?? false)>{{ $child->config['label'] ?? '' }}</option>
-        @endif
+        <option value="{{ $child->id }}" @selected($values[$child->id] ?? false)>{{ $child->config['label'] ?? '' }}</option>
     @endforeach
 </select>

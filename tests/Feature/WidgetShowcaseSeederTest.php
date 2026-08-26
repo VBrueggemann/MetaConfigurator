@@ -47,7 +47,7 @@ it('rejects text longer than the configured max characters', function () {
         new PendingAnswer($this->limitedText->id, 'abc'),
     ]);
 
-    expect($evaluation->componentContexts['validation'])->toHaveKey($this->limitedText->id);
+    expect(remainingValidationRules($evaluation, $this->limitedText->id))->not->toBeEmpty();
 });
 
 it('accepts text within the configured max characters', function () {
@@ -57,7 +57,7 @@ it('accepts text within the configured max characters', function () {
         new PendingAnswer($this->limitedText->id, 'ab'),
     ]);
 
-    expect($evaluation->componentContexts['validation'])->not->toHaveKey($this->limitedText->id);
+    expect(remainingValidationRules($evaluation, $this->limitedText->id))->toBeEmpty();
 });
 
 it('raises the character limit when the number field is increased', function () {
@@ -67,19 +67,24 @@ it('raises the character limit when the number field is increased', function () 
         new PendingAnswer($this->limitedText->id, 'abcde'),
     ]);
 
-    expect($evaluation->componentContexts['validation'])->not->toHaveKey($this->limitedText->id);
+    expect(remainingValidationRules($evaluation, $this->limitedText->id))->toBeEmpty();
 });
 
 it('shows only the inspiring messages matching the selected strengths', function () {
+    app(CommitConfigurationAnswers::class)($this->configuration, [
+        new PendingAnswer($this->step1->id, true),
+        new PendingAnswer($this->maxChars->id, 2),
+        new PendingAnswer($this->limitedText->id, 'ab'),
+    ]);
+
     $evaluation = app(FetchConfigurationState::class)($this->configuration, [
         new PendingAnswer($this->courage->id, true),
         new PendingAnswer($this->creativity->id, false),
         new PendingAnswer($this->curiosity->id, true),
     ]);
 
-    expect($evaluation->componentContexts['visibility'][$this->courageMessage->id])->toBeTrue();
-    expect($evaluation->componentContexts['visibility'][$this->creativityMessage->id])->toBeFalse();
-    expect($evaluation->componentContexts['visibility'][$this->curiosityMessage->id])->toBeTrue();
+    expect(scopeIds($evaluation))->toContain($this->courageMessage->id, $this->curiosityMessage->id);
+    expect(scopeIds($evaluation))->not->toContain($this->creativityMessage->id);
 });
 
 it('walks through every step in order via flow rules', function () {

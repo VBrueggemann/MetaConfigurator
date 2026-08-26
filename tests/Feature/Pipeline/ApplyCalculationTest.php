@@ -15,7 +15,7 @@ it('exposes named formula results to expressions via dot access', function () {
     $price = View::factory()->textInput()->childOf($group)->create();
 
     Component::factory()->calculation([
-        'subtotal' => "answers['{$qty->id}'] * answers['{$price->id}']",
+        'subtotal' => "answer('{$qty->id}') * answer('{$price->id}')",
     ])->create(['configurator_id' => $configurator->id]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
@@ -48,7 +48,7 @@ it('lets a visibility rule reference a calculation result', function () {
     $discountNotice = View::factory()->html('bulk discount applied')->childOf($group)->create();
 
     Component::factory()->calculation([
-        'qty' => "answers['{$qty->id}']",
+        'qty' => "answer('{$qty->id}')",
     ])->create(['configurator_id' => $configurator->id]);
 
     Rule::factory()->visibility('calculation.qty > 10')->create(['view_id' => $discountNotice->id]);
@@ -56,10 +56,10 @@ it('lets a visibility rule reference a calculation result', function () {
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
     $hidden = app(FetchConfigurationState::class)($configuration, [new PendingAnswer($qty->id, 5)]);
-    expect($hidden->componentContexts['visibility'][$discountNotice->id])->toBeFalse();
+    expect(scopeIds($hidden))->not->toContain($discountNotice->id);
 
     $shown = app(FetchConfigurationState::class)($configuration, [new PendingAnswer($qty->id, 20)]);
-    expect($shown->componentContexts['visibility'][$discountNotice->id])->toBeTrue();
+    expect(scopeIds($shown))->toContain($discountNotice->id);
 });
 
 it('throws a clear error on a circular formula dependency', function () {

@@ -24,26 +24,26 @@ class TemplatingShowcaseSeeder extends Seeder
         $lastName = View::factory()->textInput('Last name')->childOf($root)->create(['order' => 1]);
 
         Component::factory()->calculation([
-            'firstNameLength' => "strlen(answers['{$firstName->id}'])",
+            'firstNameLength' => "strlen(answer('{$firstName->id}'))",
             'firstNameRemaining' => "{$maxLength} - calculation.firstNameLength",
-            'lastNameLength' => "strlen(answers['{$lastName->id}'])",
+            'lastNameLength' => "strlen(answer('{$lastName->id}'))",
             'lastNameRemaining' => "{$maxLength} - calculation.lastNameLength",
         ])->create(['configurator_id' => $configurator->id]);
 
         $firstNameRule = Rule::factory()->validation("calculation.firstNameLength <= {$maxLength}")->create([
             'view_id' => $firstName->id,
-            'meta' => ['message' => "'{{ answers['{$firstName->id}'] }}' is {{ calculation.firstNameLength - {$maxLength} }} characters over the limit"],
+            'meta' => ['message' => "'{{ answer('{$firstName->id}') }}' is {{ calculation.firstNameLength - {$maxLength} }} characters over the limit"],
         ]);
 
         $lastNameRule = Rule::factory()->validation("calculation.lastNameLength <= {$maxLength}")->create([
             'view_id' => $lastName->id,
-            'meta' => ['message' => "'{{ answers['{$lastName->id}'] }}' is {{ calculation.lastNameLength - {$maxLength} }} characters over the limit"],
+            'meta' => ['message' => "'{{ answer('{$lastName->id}') }}' is {{ calculation.lastNameLength - {$maxLength} }} characters over the limit"],
         ]);
 
         $firstNameInfo = View::factory()->html('placeholder')->childOf($root)->create(['order' => 2]);
         $firstNameInfo->update(['config' => ['content' => implode('<br>', [
             "Question: {{ label('{$firstName->id}') }}",
-            "Answer: {{ answers['{$firstName->id}'] }}",
+            "Answer: {{ answer('{$firstName->id}') }}",
             'Character count: {{ calculation.firstNameLength }}',
             'Characters left before the limit triggers: {{ calculation.firstNameRemaining }}',
             "Validation message preview: {{ message('{$firstNameRule->id}') }}",
@@ -52,7 +52,7 @@ class TemplatingShowcaseSeeder extends Seeder
         $lastNameInfo = View::factory()->html('placeholder')->childOf($root)->create(['order' => 3]);
         $lastNameInfo->update(['config' => ['content' => implode('<br>', [
             "Question: {{ label('{$lastName->id}') }}",
-            "Answer: {{ answers['{$lastName->id}'] }}",
+            "Answer: {{ answer('{$lastName->id}') }}",
             'Character count: {{ calculation.lastNameLength }}',
             'Characters left before the limit triggers: {{ calculation.lastNameRemaining }}',
             "Validation message preview: {{ message('{$lastNameRule->id}') }}",

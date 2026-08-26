@@ -15,7 +15,7 @@ it('substitutes a pending, not-yet-committed answer into a later view label', fu
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $name = View::factory()->textInput()->childOf($group)->create();
     $greeting = View::factory()->html('placeholder')->childOf($group)->create();
-    $greeting->update(['config' => ['content' => "Hello {{ answers['{$name->id}'] }}!"]]);
+    $greeting->update(['config' => ['content' => "Hello {{ answer('{$name->id}') }}!"]]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -49,7 +49,7 @@ it('falls back to the raw placeholder for an unknown or unanswered reference', f
     $unanswered = View::factory()->textInput()->childOf($group)->create();
     $display = View::factory()->html('placeholder')->childOf($group)->create();
     $display->update(['config' => [
-        'content' => "Unanswered: {{ answers['{$unanswered->id}'] }} | Unknown: {{ answers['00000000-0000-0000-0000-000000000000'] }}",
+        'content' => "Unanswered: {{ answer('{$unanswered->id}') }} | Unknown: {{ answer('00000000-0000-0000-0000-000000000000') }}",
     ]]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
@@ -59,7 +59,7 @@ it('falls back to the raw placeholder for an unknown or unanswered reference', f
     $resolved = $evaluation->componentContexts['scope']->first()->children->firstWhere('id', $display->id);
 
     expect($resolved->config['content'])->toBe(
-        "Unanswered: {{ answers['{$unanswered->id}'] }} | Unknown: {{ answers['00000000-0000-0000-0000-000000000000'] }}"
+        "Unanswered: {{ answer('{$unanswered->id}') }} | Unknown: {{ answer('00000000-0000-0000-0000-000000000000') }}"
     );
 });
 
@@ -68,7 +68,7 @@ it('escapes a substituted value inside raw content but keeps authored html raw',
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $comment = View::factory()->textInput()->childOf($group)->create();
     $display = View::factory()->html('placeholder')->childOf($group)->create();
-    $display->update(['config' => ['content' => "<strong>Hi {{ answers['{$comment->id}'] }}</strong>"]]);
+    $display->update(['config' => ['content' => "<strong>Hi {{ answer('{$comment->id}') }}</strong>"]]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -81,15 +81,15 @@ it('escapes a substituted value inside raw content but keeps authored html raw',
     expect($resolved->config['content'])->toBe('<strong>Hi &lt;script&gt;alert(1)&lt;/script&gt;</strong>');
 });
 
-it('resolves another view label and a rule validation message via label() and message()', function () {
+it('resolves another view label and its validation error via label() and validationError()', function () {
     $configurator = Configurator::factory()->create();
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $field = View::factory()->textInput('Shoe size')->childOf($group)->create();
-    $rule = Rule::factory()->validation('false')->create(['view_id' => $field->id, 'meta' => ['message' => 'bad value']]);
+    Rule::factory()->validation('false')->create(['view_id' => $field->id, 'meta' => ['message' => 'bad value']]);
 
     $summary = View::factory()->html('placeholder')->childOf($group)->create();
     $summary->update(['config' => [
-        'content' => "Field label: {{ label('{$field->id}') }} | Rule says: {{ message('{$rule->id}') }}",
+        'content' => "Field label: {{ label('{$field->id}') }} | Rule says: {{ validationError('{$field->id}') }}",
     ]]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
@@ -123,32 +123,36 @@ it('templates the validation message with a pending answer at fetch time', funct
     $configurator = Configurator::factory()->create();
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $field = View::factory()->number('Quantity')->childOf($group)->create();
-    Rule::factory()->validation("answers['{$field->id}'] >= 10")->create([
+    Rule::factory()->validation("answer('{$field->id}') >= 10")->create([
         'view_id' => $field->id,
-        'meta' => ['message' => "{{ answers['{$field->id}'] }} is too low"],
+        'meta' => ['message' => "{{ answer('{$field->id}') }} is too low"],
     ]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
     $evaluation = app(FetchConfigurationState::class)($configuration, [new PendingAnswer($field->id, 5)]);
 
-    expect($evaluation->componentContexts['validation'][$field->id][0])->toBe('5 is too low');
+    $resolvedField = $evaluation->componentContexts['scope']->first()->children->firstWhere('id', $field->id);
+
+    expect($resolvedField->rules->first()->meta['message'])->toBe('5 is too low');
 });
 
 it('templates the validation message at commit time', function () {
     $configurator = Configurator::factory()->create();
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $field = View::factory()->number('Quantity')->childOf($group)->create();
-    Rule::factory()->validation("answers['{$field->id}'] >= 10")->create([
+    Rule::factory()->validation("answer('{$field->id}') >= 10")->create([
         'view_id' => $field->id,
-        'meta' => ['message' => "{{ answers['{$field->id}'] }} is too low"],
+        'meta' => ['message' => "{{ answer('{$field->id}') }} is too low"],
     ]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
     $evaluation = app(CommitConfigurationAnswers::class)($configuration, [new PendingAnswer($field->id, 5)]);
 
-    expect($evaluation->componentContexts['validation'][$field->id][0])->toBe('5 is too low');
+    $resolvedField = $evaluation->componentContexts['scope']->first()->children->firstWhere('id', $field->id);
+
+    expect($resolvedField->rules->first()->meta['message'])->toBe('5 is too low');
 });
 
 it('joins an array result with a comma when substituted', function () {

@@ -2,17 +2,46 @@
 
 use App\Actions\Pipeline\ResolveTemplate;
 use App\Enums\ComponentType;
+use App\Enums\RuleComponent;
 use App\Models\Rule;
 use App\Models\View;
 use Illuminate\Support\Collection;
 
 return [
-    'fields' => [
+    'functions' => [
         View::class => [
-            'label' => fn (View $view) => $view->config['label'] ?? null,
-        ],
-        Rule::class => [
-            'message' => fn (Rule $rule) => $rule->meta['message'] ?? null,
+            'label' => [
+                'with' => [],
+                'resolve' => fn (View $view, array $context) => isset($view->config['label'])
+                    ? app(ResolveTemplate::class)($view->config['label'], $context)
+                    : null,
+            ],
+            'answer' => [
+                'with' => ['descendants'],
+                'resolve' => function (View $view, array $context): mixed {
+                    $viewIds = [$view->id, ...$view->descendants->pluck('id')];
+
+                    $persisted = collect($context['relevantAnswers'] ?? [])->whereIn('view_id', $viewIds)->pluck('value', 'view_id');
+                    $pending = ($context['__persistedOnly'] ?? false)
+                        ? collect()
+                        : collect($context['pendingAnswers'] ?? [])->whereIn('viewId', $viewIds)->pluck('value', 'viewId');
+                    $merged = $persisted->merge($pending);
+
+                    if ($merged->isNotEmpty()) {
+                        return $merged->values()->implode(', ');
+                    }
+
+                    return collect($context['relevantAnswerChunks'] ?? [])->contains(fn ($chunk) => $chunk->anchor_view_id === $view->id) ? true : null;
+                },
+            ],
+            'validationError' => [
+                'with' => ['rules'],
+                'resolve' => fn (View $view, array $context) => $view->rules
+                    ->where('component', RuleComponent::Validation)
+                    ->pluck('meta.message')
+                    ->filter()
+                    ->implode(', '),
+            ],
         ],
     ],
 

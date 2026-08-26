@@ -31,7 +31,7 @@ it('hides the allergy question for a non-vegan respondent', function () {
 
     $evaluation = app(FetchConfigurationState::class)($this->configuration);
 
-    expect($evaluation->componentContexts['visibility'][$this->allergy->id])->toBeFalse();
+    expect(scopeIds($evaluation))->not->toContain($this->allergy->id);
 });
 
 it('shows and requires the allergy question for a vegan respondent', function () {
@@ -40,8 +40,8 @@ it('shows and requires the allergy question for a vegan respondent', function ()
         new PendingAnswer($this->allergy->id, null),
     ]);
 
-    expect($evaluation->componentContexts['visibility'][$this->allergy->id])->toBeTrue();
-    expect($evaluation->componentContexts['validation'])->toHaveKey($this->allergy->id);
+    expect(scopeIds($evaluation))->toContain($this->allergy->id);
+    expect(remainingValidationRules($evaluation, $this->allergy->id))->not->toBeEmpty();
 });
 
 it('rejects a name over 50 characters', function () {
@@ -51,7 +51,7 @@ it('rejects a name over 50 characters', function () {
         new PendingAnswer($this->diet->id, 'omnivore'),
     ]);
 
-    expect($evaluation->componentContexts['validation'])->toHaveKey($this->name->id);
+    expect(remainingValidationRules($evaluation, $this->name->id))->not->toBeEmpty();
 });
 
 it('does not advance past About You while required fields are missing', function () {

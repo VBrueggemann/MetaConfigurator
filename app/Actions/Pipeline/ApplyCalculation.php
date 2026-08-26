@@ -16,13 +16,15 @@ final class ApplyCalculation
 
     public function __invoke(ConfigurationEvaluation $evaluation, Closure $next): mixed
     {
-        $component = Component::query()
-            ->where('configurator_id', $evaluation->configuration->configurator_id)
-            ->where('type', ComponentType::Calculation)
-            ->first();
+        if (! array_key_exists('calculationFormulas', $evaluation->context)) {
+            $evaluation->context['calculationFormulas'] = Component::query()
+                ->where('configurator_id', $evaluation->configuration->configurator_id)
+                ->where('type', ComponentType::Calculation)
+                ->first()?->config['formulas'] ?? [];
+        }
 
         /** @var array<string, string> $formulas */
-        $formulas = $component?->config['formulas'] ?? [];
+        $formulas = $evaluation->context['calculationFormulas'];
 
         $evaluation->context['calculation'] = (object) $this->resolve($formulas, $evaluation->context);
 

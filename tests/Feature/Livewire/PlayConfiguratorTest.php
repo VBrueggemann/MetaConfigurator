@@ -49,11 +49,11 @@ it('does not persist an answer until next is called', function () {
 it('reveals the allergy question once diet is set to vegan, without persisting', function () {
     $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator]);
 
-    expect($component->get('visibleViewIds'))->not->toContain($this->allergy->id);
+    expect($component->instance()->visibleViewIds())->not->toContain($this->allergy->id);
 
     $component->set("values.{$this->diet->id}", 'vegan');
 
-    expect($component->get('visibleViewIds'))->toContain($this->allergy->id);
+    expect($component->instance()->visibleViewIds())->toContain($this->allergy->id);
     expect(Answer::count())->toBe(0);
 });
 
@@ -75,7 +75,7 @@ it('does not advance scope on live edits, only on an explicit commit', function 
         ->toContain($this->aboutYou->id)
         ->not->toContain($this->normalEnd->id)
         ->not->toContain($this->allergyEnd->id);
-    expect($component->get('visibleViewIds'))
+    expect($component->instance()->visibleViewIds())
         ->toContain($this->allergy->id);
 });
 

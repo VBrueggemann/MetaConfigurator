@@ -6,55 +6,58 @@ use App\Actions\DTO\ConfigurationEvaluation;
 use App\Enums\ComponentType;
 use App\Enums\RuleComponent;
 use App\Exceptions\ValidationFailedException;
+use App\Models\Rule;
 use App\Models\View;
 use Closure;
+use Illuminate\Support\Collection;
 
 final class ApplyValidation
 {
     public function __construct(
         private readonly EvaluateRule $evaluateRule,
-        private readonly bool $requireVisible,
         private readonly bool $throwOnFailure,
     ) {}
 
-    protected array $errors = [];
-
     public function __invoke(ConfigurationEvaluation $evaluation, Closure $next): mixed
     {
-        $rootView = $evaluation->componentContexts[ComponentType::Scope->value]->first();
-        $pendingViews = $evaluation->componentContexts[ComponentType::PendingViews->value]->pluck('id')->all();
-        $visibility = $evaluation->componentContexts[ComponentType::Visibility->value] ?? [];
+        $roots = collect($evaluation->componentContexts[ComponentType::Scope->value] ?? []);
 
-        if ($rootView) {
-            $this->validate($rootView, $evaluation->context, $pendingViews, $visibility);
+        $pendingViewIds = collect($evaluation->pendingAnswers)->pluck('viewId')->all();
+        $pendingPaths = $roots->toList()->whereIn('id', $pendingViewIds)->pluck('path')->implode('|');
+
+        foreach ($roots as $view) {
+            $this->validate($view, $evaluation->context, $pendingPaths);
         }
 
-        $evaluation->componentContexts[ComponentType::Validation->value] = $this->errors;
-
-        if ($this->throwOnFailure && $this->errors !== []) {
-            throw new ValidationFailedException($this->errors);
+        if ($this->throwOnFailure && $this->hasFailingValidationRule($roots)) {
+            throw new ValidationFailedException($roots->toList()->pluck('id')->all());
         }
 
         return $next($evaluation);
     }
 
     /**
-     * @param  array<string, bool>  $visibility
+     * @param  array<string, mixed>  $context
      */
-    private function validate(View $view, array $context, array $pendingViews, array $visibility)
+    private function validate(View $view, array $context, string $pendingPaths): void
     {
-        $isVisible = ! $this->requireVisible || ($visibility[$view->id] ?? true);
+        $isPending = $pendingPaths !== '' && str_contains($pendingPaths, $view->id);
 
-        if ($isVisible && in_array($view->id, $pendingViews)) {
-            $rules = $view->rules->filter(fn ($rule) => $rule->component === RuleComponent::Validation);
+        $view->setRelation('rules', $view->rules->reject(
+            fn (Rule $rule): bool => $rule->component === RuleComponent::Validation
+                && ($isPending ? ($this->evaluateRule)($rule, $context) : true)
+        ));
 
-            foreach ($rules as $rule) {
-                if (! ($this->evaluateRule)($rule, $context)) {
-                    $this->errors[$view->id][] = $rule->meta['message'] ?? 'invalid';
-                }
-            }
-        }
+        $view->children->each(fn (View $child) => $this->validate($child, $context, $pendingPaths));
+    }
 
-        $view->children->each(fn (View $child) => $this->validate($child, $context, $pendingViews, $visibility));
+    /**
+     * @param  Collection<int, View>  $roots
+     */
+    private function hasFailingValidationRule(Collection $roots): bool
+    {
+        return $roots->toList()->contains(
+            fn (View $view): bool => $view->rules->contains(fn (Rule $rule): bool => $rule->component === RuleComponent::Validation)
+        );
     }
 }

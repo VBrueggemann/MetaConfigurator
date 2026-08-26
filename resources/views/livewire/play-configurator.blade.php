@@ -28,17 +28,12 @@
 
     <div class="space-y-6">
         @foreach ($items as $item)
-            @if (in_array($item->id, $visibleViewIds, true))
-                @include('livewire.play-configurator.item', ['item' => $item])
-            @endif
+            @include('livewire.play-configurator.item', ['item' => $item])
         @endforeach
     </div>
 
     @php
-        $flattenIds = function ($nodes) use (&$flattenIds) {
-            return collect($nodes)->flatMap(fn ($node) => collect([$node->id])->merge($flattenIds($node->children)));
-        };
-        $unattachedErrors = collect($fieldErrors)->except($flattenIds($items));
+        $unattachedErrors = collect($fieldErrors)->except(collect($items)->toList()->pluck('id'));
     @endphp
     @if ($unattachedErrors->isNotEmpty())
         <ul class="mt-4 text-sm text-red-600">

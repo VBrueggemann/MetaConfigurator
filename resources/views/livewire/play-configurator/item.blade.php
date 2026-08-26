@@ -8,9 +8,7 @@
         @else
             <div class="flex {{ ($item->config['direction'] ?? 'vertical') === 'horizontal' ? 'flex-row flex-wrap gap-4' : 'flex-col space-y-6' }}">
                 @foreach ($item->children as $child)
-                    @if (in_array($child->id, $visibleViewIds, true))
-                        @include('livewire.play-configurator.item', ['item' => $child])
-                    @endif
+                    @include('livewire.play-configurator.item', ['item' => $child])
                 @endforeach
             </div>
         @endif

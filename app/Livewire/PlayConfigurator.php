@@ -6,6 +6,7 @@ use App\Actions\CommitConfigurationAnswers;
 use App\Actions\DTO\PendingAnswer;
 use App\Actions\FetchConfigurationState;
 use App\Actions\GetCurrentConfiguration;
+use App\Enums\RuleComponent;
 use App\Enums\ViewType;
 use App\Models\Answer;
 use App\Models\Configuration;
@@ -30,9 +31,6 @@ class PlayConfigurator extends Component
 
     /** @var array<string, list<string>> */
     public array $groupChildViewIds = [];
-
-    /** @var list<string> */
-    public array $visibleViewIds = [];
 
     /** @var list<string> */
     public array $scopeViewIds = [];
@@ -106,7 +104,7 @@ class PlayConfigurator extends Component
     {
         $evaluation = app(CommitConfigurationAnswers::class)($this->configuration, $this->toPendingAnswers($this->values), $this->requestedAnchorViewId);
 
-        $this->fieldErrors = $evaluation->componentContexts['validation'] ?? [];
+        $this->fieldErrors = $this->deriveFieldErrors($evaluation->componentContexts['scope']);
 
         if ($this->fieldErrors !== []) {
             $this->refreshRenderState();
@@ -128,15 +126,22 @@ class PlayConfigurator extends Component
         return $this->scopeViews->whereNull('parent_id')->values();
     }
 
+    /**
+     * @return list<string>
+     */
+    public function visibleViewIds(): array
+    {
+        return $this->scopeViews->keys()->all();
+    }
+
     private function fetch(bool $advanceScope): void
     {
         $evaluation = app(FetchConfigurationState::class)($this->configuration, $this->toPendingAnswers($this->values), $this->requestedAnchorViewId);
 
-        $this->visibleViewIds = array_keys(array_filter($evaluation->componentContexts['visibility'] ?? []));
-        $this->fieldErrors = $evaluation->componentContexts['validation'] ?? [];
+        $this->fieldErrors = $this->deriveFieldErrors($evaluation->componentContexts['scope']);
         $this->breadcrumbViews = $evaluation->componentContexts['breadcrumbs'];
         $this->breadcrumbViewIds = $this->breadcrumbViews->pluck('id')->all();
-        $this->scopeViews = $this->flattenViews($evaluation->componentContexts['scope'])->keyBy('id');
+        $this->scopeViews = collect($evaluation->componentContexts['scope'])->toList()->keyBy('id');
 
         if ($advanceScope) {
             $this->scopeViewIds = $this->scopeViews->keys()->all();
@@ -148,22 +153,26 @@ class PlayConfigurator extends Component
         $evaluation = app(FetchConfigurationState::class)($this->configuration, $this->toPendingAnswers($this->values), $this->requestedAnchorViewId);
 
         $this->breadcrumbViews = $evaluation->componentContexts['breadcrumbs'];
-        $this->scopeViews = $this->flattenViews($evaluation->componentContexts['scope'])->keyBy('id');
+        $this->scopeViews = collect($evaluation->componentContexts['scope'])->toList()->keyBy('id');
     }
 
     /**
-     * @param  iterable<ViewModel>  $views
-     * @return Collection<int, ViewModel>
+     * @param  iterable<ViewModel>  $roots
+     * @return array<string, list<string>>
      */
-    private function flattenViews(iterable $views): Collection
+    private function deriveFieldErrors(iterable $roots): array
     {
-        return collect($views)->flatMap(fn (ViewModel $view): array => [$view, ...$this->flattenViews($view->children)->all()]);
+        return collect($roots)->toList()
+            ->mapWithKeys(fn (ViewModel $view): array => [
+                $view->id => $view->rules->where('component', RuleComponent::Validation)->pluck('meta.message')->all(),
+            ])
+            ->filter(fn (array $messages): bool => $messages !== [])
+            ->all();
     }
 
     private function loadValues(): void
     {
         $fields = $this->scopeViews
-            ->whereIn('id', $this->visibleViewIds)
             ->filter(fn (ViewModel $view): bool => $view->type === ViewType::Input);
 
         $existing = $this->configuration->answers()
@@ -188,7 +197,6 @@ class PlayConfigurator extends Component
     private function loadGroupSelections(): void
     {
         $multiselectGroups = $this->scopeViews
-            ->whereIn('id', $this->visibleViewIds)
             ->filter(fn (ViewModel $view): bool => $view->type === ViewType::Group && ($view->config['widget'] ?? null) === 'multiselect');
 
         foreach ($multiselectGroups as $group) {

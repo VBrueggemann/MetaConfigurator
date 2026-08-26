@@ -27,23 +27,23 @@ class FictionalSurveySeeder extends Seeder
         $allergyEnd = View::factory()->html('Thanks! We\'ll take care of you allergy.')
             ->childOf($root)->create(['order' => 2]);
 
-        Rule::factory()->visibility("answers['{$diet->id}'] == 'vegan'")
+        Rule::factory()->visibility("answer('{$diet->id}') == 'vegan'")
             ->create(['view_id' => $allergy->id]);
 
-        Rule::factory()->validation("answers['{$name->id}'] != null && strlen(answers['{$name->id}']) > 0")
+        Rule::factory()->validation("answer('{$name->id}') != null && strlen(answer('{$name->id}')) > 0")
             ->create(['view_id' => $name->id, 'meta' => ['message' => 'Please tell us your name.']]);
-        Rule::factory()->validation("answers['{$name->id}'] == null || strlen(answers['{$name->id}']) <= 50")
+        Rule::factory()->validation("answer('{$name->id}') == null || strlen(answer('{$name->id}')) <= 50")
             ->create(['view_id' => $name->id, 'meta' => ['message' => 'Name must be 50 characters or fewer.']]);
 
-        Rule::factory()->validation("answers['{$diet->id}'] != null && strlen(answers['{$diet->id}']) > 0")
+        Rule::factory()->validation("answer('{$diet->id}') != null && strlen(answer('{$diet->id}')) > 0")
             ->create(['view_id' => $diet->id, 'meta' => ['message' => 'Please tell us your diet.']]);
 
-        Rule::factory()->validation("answers['{$allergy->id}'] != null && strlen(answers['{$allergy->id}']) > 0")
+        Rule::factory()->validation("answer('{$allergy->id}') != null && strlen(answer('{$allergy->id}')) > 0")
             ->create(['view_id' => $allergy->id, 'meta' => ['message' => 'Please tell us about your allergy.']]);
 
-        Rule::factory()->flow("answers['{$aboutYou->id}'] != null && answers['{$allergy->id}'] == null", $normalEnd->id)
+        Rule::factory()->flow("answer('{$aboutYou->id}') != null && answer('{$allergy->id}') == null", $normalEnd->id)
             ->create(['view_id' => $normalEnd->id]);
-        Rule::factory()->flow("answers['{$aboutYou->id}'] != null && answers['{$allergy->id}'] != null", $allergyEnd->id)
+        Rule::factory()->flow("answer('{$aboutYou->id}') != null && answer('{$allergy->id}') != null", $allergyEnd->id)
             ->create(['view_id' => $allergyEnd->id]);
 
         Component::factory()->scope(depth: 1)

@@ -1,12 +1,15 @@
 <?php
 
 use App\Actions\DTO\ConfigurationEvaluation;
+use App\Enums\RuleComponent;
 use App\Enums\ViewType;
 use App\Models\Answer;
 use App\Models\AnswerChunk;
 use App\Models\Configuration;
+use App\Models\Rule;
 use App\Models\View;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use Tests\TestCase;
 
 /*
@@ -75,9 +78,18 @@ function answer(Configuration $configuration, View $view, mixed $value): ?Answer
  */
 function scopeIds(ConfigurationEvaluation $evaluation): array
 {
-    $flatten = function ($views) use (&$flatten): array {
-        return collect($views)->flatMap(fn ($view) => [$view->id, ...$flatten($view->children)])->all();
-    };
+    return collect($evaluation->componentContexts['scope'])->toList()->pluck('id')->all();
+}
 
-    return $flatten($evaluation->componentContexts['scope']);
+function scopeView(ConfigurationEvaluation $evaluation, string $viewId): ?View
+{
+    return collect($evaluation->componentContexts['scope'])->toList()->firstWhere('id', $viewId);
+}
+
+/**
+ * @return Collection<int, Rule>
+ */
+function remainingValidationRules(ConfigurationEvaluation $evaluation, string $viewId): Collection
+{
+    return scopeView($evaluation, $viewId)->rules->where('component', RuleComponent::Validation);
 }

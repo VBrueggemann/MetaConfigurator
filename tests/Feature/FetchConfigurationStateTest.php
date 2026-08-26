@@ -15,16 +15,15 @@ it('hides a view whose visibility rule does not fire, and excludes it from valid
     $diet = View::factory()->textInput()->childOf($group)->create();
     $allergy = View::factory()->textInput()->childOf($group)->create();
 
-    Rule::factory()->visibility("answers['{$diet->id}'] == 'vegan'")->create(['view_id' => $allergy->id]);
-    Rule::factory()->validation("answers['{$allergy->id}'] != null")->create(['view_id' => $allergy->id]);
+    Rule::factory()->visibility("answer('{$diet->id}') == 'vegan'")->create(['view_id' => $allergy->id]);
+    Rule::factory()->validation("answer('{$allergy->id}') != null")->create(['view_id' => $allergy->id]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     answer($configuration, $diet, 'omnivore');
 
     $evaluation = app(FetchConfigurationState::class)($configuration);
 
-    expect($evaluation->componentContexts['visibility'][$allergy->id])->toBeFalse();
-    expect($evaluation->componentContexts['validation'])->toBe([]);
+    expect(scopeIds($evaluation))->not->toContain($allergy->id);
 });
 
 it('shows a view once its visibility rule fires', function () {
@@ -33,14 +32,14 @@ it('shows a view once its visibility rule fires', function () {
     $diet = View::factory()->textInput()->childOf($group)->create();
     $allergy = View::factory()->textInput()->childOf($group)->create();
 
-    Rule::factory()->visibility("answers['{$diet->id}'] == 'vegan'")->create(['view_id' => $allergy->id]);
+    Rule::factory()->visibility("answer('{$diet->id}') == 'vegan'")->create(['view_id' => $allergy->id]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     answer($configuration, $diet, 'vegan');
 
     $evaluation = app(FetchConfigurationState::class)($configuration);
 
-    expect($evaluation->componentContexts['visibility'][$allergy->id])->toBeTrue();
+    expect(scopeIds($evaluation))->toContain($allergy->id);
 });
 
 it('hides a whole branch when its ancestor is hidden', function () {
@@ -50,15 +49,14 @@ it('hides a whole branch when its ancestor is hidden', function () {
     $veganExtras = View::factory()->group()->childOf($root)->create();
     $content = View::factory()->html('curated menu')->childOf($veganExtras)->create();
 
-    Rule::factory()->visibility("answers['{$diet->id}'] == 'vegan'")->create(['view_id' => $veganExtras->id]);
+    Rule::factory()->visibility("answer('{$diet->id}') == 'vegan'")->create(['view_id' => $veganExtras->id]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     answer($configuration, $diet, 'omnivore');
 
     $evaluation = app(FetchConfigurationState::class)($configuration);
 
-    expect($evaluation->componentContexts['visibility'][$veganExtras->id])->toBeFalse();
-    expect($evaluation->componentContexts['visibility'][$content->id])->toBeFalse();
+    expect(scopeIds($evaluation))->not->toContain($veganExtras->id, $content->id);
 });
 
 it('previews pending answers without persisting them', function () {
@@ -66,13 +64,13 @@ it('previews pending answers without persisting them', function () {
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $diet = View::factory()->textInput()->childOf($group)->create();
     $allergy = View::factory()->textInput()->childOf($group)->create();
-    Rule::factory()->visibility("answers['{$diet->id}'] == 'vegan'")->create(['view_id' => $allergy->id]);
+    Rule::factory()->visibility("answer('{$diet->id}') == 'vegan'")->create(['view_id' => $allergy->id]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
     $evaluation = app(FetchConfigurationState::class)($configuration, [new PendingAnswer($diet->id, 'vegan')]);
 
-    expect($evaluation->componentContexts['visibility'][$allergy->id])->toBeTrue();
+    expect(scopeIds($evaluation))->toContain($allergy->id);
     expect(Answer::count())->toBe(0);
 });
 
@@ -82,7 +80,7 @@ it('reveals only the current unanswered step (just_next strategy)', function () 
     $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
     $name = View::factory()->textInput()->childOf($groupOne)->create();
-    Rule::factory()->validation("answers['{$name->id}'] != null")->create(['view_id' => $name->id]);
+    Rule::factory()->validation("answer('{$name->id}') != null")->create(['view_id' => $name->id]);
     Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
@@ -138,22 +136,21 @@ it('ignores a requested anchor that is not an existing relevant chunk, falling b
     expect($evaluation->anchorViewId)->toBe($groupOne->id);
 });
 
-it('validates a pending answer even on a currently hidden view (fetch is a live preview, not an enforcement gate)', function () {
+it('does not validate a pending answer on a currently hidden view, since it is pruned from scope before validation runs', function () {
     $configurator = Configurator::factory()->create();
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $diet = View::factory()->textInput()->childOf($group)->create();
     $allergy = View::factory()->textInput()->childOf($group)->create();
 
-    Rule::factory()->visibility("answers['{$diet->id}'] == 'vegan'")->create(['view_id' => $allergy->id]);
-    Rule::factory()->validation("answers['{$allergy->id}'] != null")->create(['view_id' => $allergy->id]);
+    Rule::factory()->visibility("answer('{$diet->id}') == 'vegan'")->create(['view_id' => $allergy->id]);
+    Rule::factory()->validation("answer('{$allergy->id}') != null")->create(['view_id' => $allergy->id]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     answer($configuration, $diet, 'omnivore');
 
     $evaluation = app(FetchConfigurationState::class)($configuration, [new PendingAnswer($allergy->id, null)]);
 
-    expect($evaluation->componentContexts['visibility'][$allergy->id])->toBeFalse();
-    expect($evaluation->componentContexts['validation'])->toHaveKey($allergy->id);
+    expect(scopeIds($evaluation))->not->toContain($allergy->id);
 });
 
 it('does not advance scope from a pending answer alone', function () {

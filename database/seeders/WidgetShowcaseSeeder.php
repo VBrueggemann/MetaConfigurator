@@ -35,7 +35,7 @@ class WidgetShowcaseSeeder extends Seeder
             ->childOf($step1)->create(['order' => 1]);
 
         Rule::factory()->validation(
-            "answers['{$limitedText->id}'] == null || strlen(answers['{$limitedText->id}']) <= answers['{$maxChars->id}']"
+            "answer('{$limitedText->id}') == null || strlen(answer('{$limitedText->id}')) <= answer('{$maxChars->id}')"
         )->create(['view_id' => $limitedText->id, 'meta' => ['message' => 'Text exceeds the allowed character limit.']]);
 
         $traits = View::factory()->multiselectGroup('Pick your strengths')->childOf($step2)->create(['order' => 0]);
@@ -50,9 +50,9 @@ class WidgetShowcaseSeeder extends Seeder
         $curiosityMessage = View::factory()->html('Curiosity is the wick in the candle of learning.')
             ->childOf($step2)->create(['order' => 3]);
 
-        Rule::factory()->visibility("answers['{$courage->id}'] == true")->create(['view_id' => $courageMessage->id]);
-        Rule::factory()->visibility("answers['{$creativity->id}'] == true")->create(['view_id' => $creativityMessage->id]);
-        Rule::factory()->visibility("answers['{$curiosity->id}'] == true")->create(['view_id' => $curiosityMessage->id]);
+        Rule::factory()->visibility("answer('{$courage->id}') == true")->create(['view_id' => $courageMessage->id]);
+        Rule::factory()->visibility("answer('{$creativity->id}') == true")->create(['view_id' => $creativityMessage->id]);
+        Rule::factory()->visibility("answer('{$curiosity->id}') == true")->create(['view_id' => $curiosityMessage->id]);
 
         View::factory()->checkbox('Checkbox')->childOf($step3)->create(['order' => 0]);
         View::factory()->color('Colour')->childOf($step3)->create(['order' => 1]);
@@ -86,9 +86,9 @@ class WidgetShowcaseSeeder extends Seeder
         View::factory()->checkbox('Medium')->childOf($multiselectCheckboxes)->create(['order' => 1]);
         View::factory()->checkbox('Large')->childOf($multiselectCheckboxes)->create(['order' => 2]);
 
-        Rule::factory()->flow("answers['{$step1->id}'] == true", $step2->id)->create(['view_id' => $step2->id]);
-        Rule::factory()->flow("answers['{$step2->id}'] == true", $step3->id)->create(['view_id' => $step3->id]);
-        Rule::factory()->flow("answers['{$step3->id}'] == true", $step4->id)->create(['view_id' => $step4->id]);
+        Rule::factory()->flow("answer('{$step1->id}') == true", $step2->id)->create(['view_id' => $step2->id]);
+        Rule::factory()->flow("answer('{$step2->id}') == true", $step3->id)->create(['view_id' => $step3->id]);
+        Rule::factory()->flow("answer('{$step3->id}') == true", $step4->id)->create(['view_id' => $step4->id]);
 
         Component::factory()->scope(depth: $this->depth)
             ->create(['configurator_id' => $configurator->id]);

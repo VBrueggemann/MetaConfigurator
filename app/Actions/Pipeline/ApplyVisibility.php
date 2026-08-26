@@ -6,7 +6,9 @@ use App\Actions\DTO\ConfigurationEvaluation;
 use App\Enums\ComponentType;
 use App\Enums\RuleComponent;
 use App\Models\Rule;
+use App\Models\View;
 use Closure;
+use Illuminate\Support\Collection;
 
 final class ApplyVisibility
 {
@@ -36,10 +38,23 @@ final class ApplyVisibility
             $visibility[$view->id] = $ownRuleVisible && $parentVisible;
         }
 
-        $evaluation->componentContexts[ComponentType::Visibility->value] = $visibility;
-
         $evaluation->pendingAnswers = collect($evaluation->pendingAnswers)->filter(fn ($answer) => $visibility[$answer->viewId] ?? false)->values()->toArray();
 
+        $this->pruneInvisible($evaluation->componentContexts[ComponentType::Scope->value] ?? collect(), $visibility);
+
         return $next($evaluation);
+    }
+
+    /**
+     * @param  Collection<int, View>  $views
+     * @param  array<string, bool>  $visibility
+     */
+    private function pruneInvisible(Collection $views, array $visibility): void
+    {
+        foreach ($views as $view) {
+            $view->setRelation('children', $view->children->filter(fn (View $child) => $visibility[$child->id] ?? false)->values());
+
+            $this->pruneInvisible($view->children, $visibility);
+        }
     }
 }

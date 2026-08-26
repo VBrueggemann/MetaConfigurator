@@ -9,8 +9,7 @@ use App\Actions\Pipeline\ApplyCalculation;
 use App\Actions\Pipeline\ApplyFlow;
 use App\Actions\Pipeline\ApplyValidation;
 use App\Actions\Pipeline\ApplyVisibility;
-use App\Actions\Pipeline\BuildAnswerContext;
-use App\Actions\Pipeline\BuildTemplateFieldContext;
+use App\Actions\Pipeline\CollectAndBatchFetchExternalReferences;
 use App\Actions\Pipeline\GuardAnchorOverride;
 use App\Actions\Pipeline\ResolveTemplateStrings;
 use App\Models\Configuration;
@@ -36,13 +35,12 @@ final class FetchConfigurationState
             ->send($evaluation)
             ->through([
                 GuardAnchorOverride::class,
-                BuildTemplateFieldContext::class,
-                BuildAnswerContext::class,
-                ApplyCalculation::class,
                 ApplyFlow::class,
+                CollectAndBatchFetchExternalReferences::class,
+                ApplyCalculation::class,
                 ApplyVisibility::class,
                 ResolveTemplateStrings::class,
-                app(ApplyValidation::class, ['requireVisible' => false, 'throwOnFailure' => false]),
+                app(ApplyValidation::class, ['throwOnFailure' => false]),
                 ApplyBreadcrumbs::class,
             ])
             ->thenReturn();

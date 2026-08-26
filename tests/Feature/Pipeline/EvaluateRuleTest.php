@@ -3,6 +3,7 @@
 use App\Actions\Pipeline\EvaluateRule;
 use App\Enums\RuleComponent;
 use App\Models\Rule;
+use App\Models\View;
 
 it('evaluates true when the rule\'s expression holds', function () {
     $rule = Rule::factory()->make(['expression' => 'age >= 18']);
@@ -19,8 +20,8 @@ it('works for each rule component', function (RuleComponent $component) {
     expect(app(EvaluateRule::class)($rule, []))->toBeTrue();
 })->with([RuleComponent::Visibility, RuleComponent::Validation]);
 
-it('returns false rather than throwing when the expression references a missing field', function () {
-    $rule = Rule::factory()->make(['expression' => "answers['missing'] == 'x'"]);
+it('returns false rather than throwing when the expression references an unknown view', function () {
+    $rule = Rule::factory()->make(['expression' => "answer('missing') == 'x'"]);
 
-    expect(app(EvaluateRule::class)($rule, ['answers' => []]))->toBeFalse();
+    expect(app(EvaluateRule::class)($rule, ['modelsById' => [View::class => []]]))->toBeFalse();
 });

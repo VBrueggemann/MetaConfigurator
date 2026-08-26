@@ -27,14 +27,24 @@ final class ApplyFlow
             ->merge($evaluation->configuration->relevantAnswerChunks->pluck('anchor_view_id'));
         $rootView = $evaluation->configuration->configurator->rootView;
 
-        $views = $rootView->descendantsAndSelf()->with('rules')->depthFirst()->get();
+        $with = collect(config('templating.functions.'.View::class, []))->flatMap(fn (array $definition): array => $definition['with'])->unique()->values()->all();
+        $views = $rootView->descendantsAndSelf()->with([...$with, 'rules'])->depthFirst()->get();
 
-        $flowContext = ['answers' => $evaluation->context['persistedAnswers'] ?? []] + $evaluation->context;
+        $flowContext = [
+            'modelsById' => [View::class => $views->keyBy('id')->all()],
+            'relevantAnswers' => $evaluation->configuration->relevantAnswers,
+            'relevantAnswerChunks' => $evaluation->configuration->relevantAnswerChunks,
+            '__persistedOnly' => true,
+        ];
 
         $nextView = $evaluation->anchorViewId !== null ? $views->find($evaluation->anchorViewId) : null;
 
+        $lastAnsweredView = $views->reverse()->first(fn (View $view) => $answeredViewIds->contains($view->id));
+        $lastAnsweredAtDepth = $lastAnsweredView?->ancestorsAndSelf()->whereDepth($depth - (int) $lastAnsweredView->depth)->first();
+        $lastAnsweredIndex = $lastAnsweredAtDepth !== null ? $views->search(fn (View $view) => $view->id === $lastAnsweredAtDepth->id) : 0;
+
         if (! $nextView) {
-            foreach ($views->reverse() as $view) {
+            foreach ($views->slice($lastAnsweredIndex)->reverse() as $view) {
                 if ((int) $view->depth > $depth) {
                     continue;
                 }
@@ -50,9 +60,6 @@ final class ApplyFlow
         }
 
         if (! $nextView) {
-            $lastAnsweredView = $views->reverse()->first(fn (View $view) => $answeredViewIds->contains($view->id));
-            $lastAnsweredAtDepth = $lastAnsweredView?->ancestorsAndSelf()->whereDepth($depth - (int) $lastAnsweredView->depth)->first();
-
             $nextView = $lastAnsweredAtDepth !== null
                 ? $rootView->descendantsAndSelf()
                     ->whereDepth($depth)
