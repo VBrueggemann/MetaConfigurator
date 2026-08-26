@@ -6,7 +6,7 @@ Before planning or editing, find the row whose globs match the file's path and r
 | --- | --- |
 | app/Actions/** | .ai/rules/app-actions.md |
 | app/** | .ai/rules/app.md |
-| app/Livewire/PlayConfigurator.php | .ai/rules/livewire.md |
+| app/Livewire/** | .ai/rules/livewire.md |
 | database/migrations/** | .ai/rules/migrations.md |
 | app/Models/** | .ai/rules/models.md |
 | app/Actions/Pipeline/** | .ai/rules/rules-engine.md |
