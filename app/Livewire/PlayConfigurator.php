@@ -28,6 +28,9 @@ class PlayConfigurator extends Component
     /** @var array<string, list<string>> */
     public array $groupSelections = [];
 
+    /** @var array<string, list<string>> */
+    public array $groupChildViewIds = [];
+
     /** @var list<string> */
     public array $visibleViewIds = [];
 
@@ -41,6 +44,12 @@ class PlayConfigurator extends Component
     public array $fieldErrors = [];
 
     public ?string $requestedAnchorViewId = null;
+
+    /** @var Collection<string, ViewModel> */
+    private Collection $scopeViews;
+
+    /** @var Collection<int, ViewModel> */
+    private Collection $breadcrumbViews;
 
     public function mount(Configurator $configurator, GetCurrentConfiguration $getCurrentConfiguration): void
     {
@@ -62,10 +71,8 @@ class PlayConfigurator extends Component
         $groupId = explode('.', $groupId)[0];
         $selectedChildIds = Arr::wrap($this->groupSelections[$groupId] ?? []);
 
-        $group = ViewModel::query()->find($groupId);
-
-        foreach ($group->children as $child) {
-            $this->values[$child->id] = in_array($child->id, $selectedChildIds, true);
+        foreach ($this->groupChildViewIds[$groupId] ?? [] as $childId) {
+            $this->values[$childId] = in_array($childId, $selectedChildIds, true);
         }
 
         $this->fetch(advanceScope: false);
@@ -84,20 +91,15 @@ class PlayConfigurator extends Component
 
     public function back(): void
     {
-        $currentSequence = $this->requestedAnchorViewId !== null
-            ? $this->configuration->relevantAnswerChunks()->where('anchor_view_id', $this->requestedAnchorViewId)->value('sequence')
-            : null;
+        $currentIndex = $this->requestedAnchorViewId !== null
+            ? array_search($this->requestedAnchorViewId, $this->breadcrumbViewIds, true)
+            : count($this->breadcrumbViewIds);
 
-        $previousChunk = $this->configuration->relevantAnswerChunks()
-            ->when($currentSequence !== null, fn ($query) => $query->where('sequence', '<', $currentSequence))
-            ->reorder('sequence', 'desc')
-            ->first();
-
-        if ($previousChunk === null) {
+        if ($currentIndex === false || $currentIndex === 0) {
             return;
         }
 
-        $this->goToView($previousChunk->anchor_view_id);
+        $this->goToView($this->breadcrumbViewIds[$currentIndex - 1]);
     }
 
     public function next(): void
@@ -107,6 +109,8 @@ class PlayConfigurator extends Component
         $this->fieldErrors = $evaluation->componentContexts['validation'] ?? [];
 
         if ($this->fieldErrors !== []) {
+            $this->refreshRenderState();
+
             return;
         }
 
@@ -117,21 +121,11 @@ class PlayConfigurator extends Component
     }
 
     /**
-     * Rebuilt fresh from scopeViewIds on every render, rather than stored as component state,
-     * since a stored Eloquent tree loses its "children" relation across Livewire's
-     * dehydrate/hydrate cycle, and re-loading it lazily is disabled.
-     *
      * @return Collection<int, ViewModel>
      */
-    public function items()
+    public function items(): Collection
     {
-        $views = ViewModel::query()->whereIn('id', $this->scopeViewIds)->orderBy('order')->get()->keyBy('id');
-
-        foreach ($views as $view) {
-            $view->setRelation('children', $views->where('parent_id', $view->id)->values());
-        }
-
-        return $views->whereNull('parent_id')->values();
+        return $this->scopeViews->whereNull('parent_id')->values();
     }
 
     private function fetch(bool $advanceScope): void
@@ -140,31 +134,40 @@ class PlayConfigurator extends Component
 
         $this->visibleViewIds = array_keys(array_filter($evaluation->componentContexts['visibility'] ?? []));
         $this->fieldErrors = $evaluation->componentContexts['validation'] ?? [];
-        $this->breadcrumbViewIds = $evaluation->componentContexts['breadcrumbs']->pluck('id')->all();
+        $this->breadcrumbViews = $evaluation->componentContexts['breadcrumbs'];
+        $this->breadcrumbViewIds = $this->breadcrumbViews->pluck('id')->all();
+        $this->scopeViews = $this->flattenViews($evaluation->componentContexts['scope'])->keyBy('id');
 
         if ($advanceScope) {
-            $this->scopeViewIds = $this->flattenViewIds($evaluation->componentContexts['scope']);
+            $this->scopeViewIds = $this->scopeViews->keys()->all();
         }
+    }
+
+    private function refreshRenderState(): void
+    {
+        $evaluation = app(FetchConfigurationState::class)($this->configuration, $this->toPendingAnswers($this->values), $this->requestedAnchorViewId);
+
+        $this->breadcrumbViews = $evaluation->componentContexts['breadcrumbs'];
+        $this->scopeViews = $this->flattenViews($evaluation->componentContexts['scope'])->keyBy('id');
     }
 
     /**
      * @param  iterable<ViewModel>  $views
-     * @return list<string>
+     * @return Collection<int, ViewModel>
      */
-    private function flattenViewIds(iterable $views): array
+    private function flattenViews(iterable $views): Collection
     {
-        return collect($views)->flatMap(fn (ViewModel $view): array => [$view->id, ...$this->flattenViewIds($view->children)])->all();
+        return collect($views)->flatMap(fn (ViewModel $view): array => [$view, ...$this->flattenViews($view->children)->all()]);
     }
 
     private function loadValues(): void
     {
-        $fields = ViewModel::query()
-            ->whereIn('id', array_intersect($this->scopeViewIds, $this->visibleViewIds))
-            ->where('type', ViewType::Input)
-            ->get();
+        $fields = $this->scopeViews
+            ->whereIn('id', $this->visibleViewIds)
+            ->filter(fn (ViewModel $view): bool => $view->type === ViewType::Input);
 
         $existing = $this->configuration->answers()
-            ->whereIn('view_id', $fields->pluck('id'))
+            ->whereIn('view_id', $fields->keys()->all())
             ->with('answerChunk')
             ->get()
             ->sortByDesc(fn (Answer $answer): int => $answer->answerChunk->sequence)
@@ -184,21 +187,20 @@ class PlayConfigurator extends Component
 
     private function loadGroupSelections(): void
     {
-        $multiselectGroups = ViewModel::query()
-            ->whereIn('id', array_intersect($this->scopeViewIds, $this->visibleViewIds))
-            ->where('type', ViewType::Group)
-            ->get()
-            ->filter(fn (ViewModel $group): bool => ($group->config['widget'] ?? null) === 'multiselect');
+        $multiselectGroups = $this->scopeViews
+            ->whereIn('id', $this->visibleViewIds)
+            ->filter(fn (ViewModel $view): bool => $view->type === ViewType::Group && ($view->config['widget'] ?? null) === 'multiselect');
 
         foreach ($multiselectGroups as $group) {
+            $childIds = $group->children->pluck('id')->all();
+            $this->groupChildViewIds[$group->id] = $childIds;
+
             if (array_key_exists($group->id, $this->groupSelections)) {
                 continue;
             }
 
-            $this->groupSelections[$group->id] = $group->children()
-                ->get()
-                ->filter(fn (ViewModel $child): bool => (bool) ($this->values[$child->id] ?? false))
-                ->pluck('id')
+            $this->groupSelections[$group->id] = collect($childIds)
+                ->filter(fn (string $childId): bool => (bool) ($this->values[$childId] ?? false))
                 ->values()
                 ->all();
         }
@@ -222,9 +224,7 @@ class PlayConfigurator extends Component
      */
     public function breadcrumbs(): Collection
     {
-        $views = ViewModel::query()->whereIn('id', $this->breadcrumbViewIds)->get()->keyBy('id');
-
-        return collect($this->breadcrumbViewIds)->map(fn (string $viewId) => $views->get($viewId))->filter()->values();
+        return $this->breadcrumbViews;
     }
 
     public function render(): ViewContract
