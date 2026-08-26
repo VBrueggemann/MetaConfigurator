@@ -25,5 +25,6 @@ class DatabaseSeeder extends Seeder
         $this->call(FictionalSurveySeeder::class);
         $this->call(WidgetShowcaseSeeder::class);
         $this->call(TemplatingShowcaseSeeder::class);
+        $this->call(WienerbergerWevoltSeeder::class);
     }
 }
