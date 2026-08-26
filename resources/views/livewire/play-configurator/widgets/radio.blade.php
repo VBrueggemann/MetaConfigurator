@@ -5,7 +5,7 @@
                 type="radio"
                 name="{{ $item->id }}"
                 value="{{ $option['value'] }}"
-                wire:model.live.blur="values.{{ $item->id }}"
+                wire:model.live{{ ($item->config['updateOn'] ?? 'blur') === 'live' ? '' : '.blur' }}="values.{{ $item->id }}"
                 class="h-4 w-4 border-gray-300"
             />
             {{ $option['label'] }}

@@ -105,3 +105,20 @@ it('lays a group with direction horizontal out as a wrapping flex row', function
 
     $component->assertSeeHtml('class="flex flex-row flex-wrap gap-4"');
 });
+
+it('syncs an input on blur by default', function () {
+    View::factory()->textInput('Name')->childOf($this->root)->create(['order' => 1]);
+
+    $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator]);
+
+    $component->assertSeeHtml('wire:model.live.blur=');
+});
+
+it('syncs an input live on every keystroke when updateOn is set to live', function () {
+    View::factory()->textInput('Name')->updateOn('live')->childOf($this->root)->create(['order' => 1]);
+
+    $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator]);
+
+    $component->assertSeeHtml('wire:model.live=');
+    $component->assertDontSeeHtml('wire:model.live.blur=');
+});

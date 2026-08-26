@@ -144,6 +144,13 @@ class ViewFactory extends Factory
         ]);
     }
 
+    public function updateOn(string $updateOn): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'config' => array_merge($attributes['config'] ?? [], ['updateOn' => $updateOn]),
+        ]);
+    }
+
     public function childOf(View $parent): static
     {
         return $this->state(fn () => [
