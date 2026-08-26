@@ -18,15 +18,6 @@ use Illuminate\Pipeline\Pipeline;
 
 final class FetchConfigurationState
 {
-    public const array PREFIX = [
-        GuardAnchorOverride::class,
-        BuildTemplateFieldContext::class,
-        BuildAnswerContext::class,
-        ApplyCalculation::class,
-        ApplyFlow::class,
-        ApplyVisibility::class,
-    ];
-
     /**
      * @param  array<int, PendingAnswer>  $pendingAnswers
      */
@@ -44,7 +35,12 @@ final class FetchConfigurationState
         return app(Pipeline::class)
             ->send($evaluation)
             ->through([
-                ...self::PREFIX,
+                GuardAnchorOverride::class,
+                BuildTemplateFieldContext::class,
+                BuildAnswerContext::class,
+                ApplyCalculation::class,
+                ApplyFlow::class,
+                ApplyVisibility::class,
                 ResolveTemplateStrings::class,
                 app(ApplyValidation::class, ['requireVisible' => false, 'throwOnFailure' => false]),
                 ApplyBreadcrumbs::class,

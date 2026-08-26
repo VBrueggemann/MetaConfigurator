@@ -29,11 +29,11 @@ final class ApplyValidation
             $this->validate($rootView, $evaluation->context, $pendingViews, $visibility);
         }
 
+        $evaluation->componentContexts[ComponentType::Validation->value] = $this->errors;
+
         if ($this->throwOnFailure && $this->errors !== []) {
             throw new ValidationFailedException($this->errors);
         }
-
-        $evaluation->componentContexts[ComponentType::Validation->value] = $this->errors;
 
         return $next($evaluation);
     }

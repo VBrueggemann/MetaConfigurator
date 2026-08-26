@@ -4,13 +4,18 @@ namespace App\Actions;
 
 use App\Actions\DTO\ConfigurationEvaluation;
 use App\Actions\DTO\PendingAnswer;
+use App\Actions\Pipeline\ApplyCalculation;
+use App\Actions\Pipeline\ApplyFlow;
 use App\Actions\Pipeline\ApplyValidation;
+use App\Actions\Pipeline\ApplyVisibility;
+use App\Actions\Pipeline\BuildAnswerContext;
+use App\Actions\Pipeline\BuildTemplateFieldContext;
 use App\Actions\Pipeline\CommitAnswers;
+use App\Actions\Pipeline\GuardAnchorOverride;
 use App\Actions\Pipeline\ResolveTemplateStrings;
 use App\Actions\Pipeline\SupersedeAnswerChunks;
-use App\Enums\ComponentType;
-use App\Exceptions\ValidationFailedException;
 use App\Models\Configuration;
+use Exception;
 use Illuminate\Pipeline\Pipeline;
 
 final class CommitConfigurationAnswers
@@ -33,16 +38,19 @@ final class CommitConfigurationAnswers
             return app(Pipeline::class)
                 ->send($evaluation)
                 ->through([
-                    ...FetchConfigurationState::PREFIX,
+                    GuardAnchorOverride::class,
+                    BuildTemplateFieldContext::class,
+                    BuildAnswerContext::class,
+                    ApplyCalculation::class,
+                    ApplyFlow::class,
+                    ApplyVisibility::class,
                     ResolveTemplateStrings::class,
                     app(ApplyValidation::class, ['requireVisible' => true, 'throwOnFailure' => true]),
                     SupersedeAnswerChunks::class,
                     CommitAnswers::class,
                 ])
                 ->thenReturn();
-        } catch (ValidationFailedException $e) {
-            $evaluation->componentContexts[ComponentType::Validation->value] = $e->errors;
-
+        } catch (Exception) {
             return $evaluation;
         }
     }
