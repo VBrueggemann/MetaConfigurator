@@ -59,6 +59,21 @@ it('no longer exposes a separate componentContexts visibility side-map', functio
     expect($evaluation->componentContexts)->not->toHaveKey('visibility');
 });
 
+it('does not hide the anchor view via its own visibility rule', function () {
+    $configurator = Configurator::factory()->create();
+    $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $child = View::factory()->group()->childOf($root)->create(['order' => 0]);
+    Rule::factory()->visibility('false')->create(['view_id' => $child->id]);
+    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
+
+    $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
+
+    $evaluation = applyVisibility($configuration);
+
+    expect($evaluation->anchorViewId)->toBe($child->id);
+    expect(scopeIds($evaluation))->toContain($child->id);
+});
+
 it('still filters out pending answers for invisible views', function () {
     $configurator = Configurator::factory()->create();
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);

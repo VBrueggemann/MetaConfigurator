@@ -20,19 +20,13 @@ final class ApplyVisibility
     {
         $visibility = [];
 
-        $rootView = $evaluation->configuration->configurator->rootView;
+        $scope = $evaluation->componentContexts[ComponentType::Scope->value] ?? collect();
 
-        // Visibility is computed over the entire view tree, independent of whatever Flow
-        // decided the current scope is - so a Flow-selected "current step" is never dropped
-        // from scope just because it (or an unrelated view elsewhere) happens to be hidden.
-        $views = $rootView === null
-            ? collect()
-            : $rootView->descendantsAndSelf()->with('rules')->depthFirst()->get();
-
-        foreach ($views as $view) {
+        foreach ($scope->toList() as $view) {
             $rules = $view->rules->filter(fn ($rule) => $rule->component === RuleComponent::Visibility);
 
-            $ownRuleVisible = $rules->every(fn (Rule $rule) => ($this->evaluateRule)($rule, $evaluation->context));
+            $ownRuleVisible = $view->id === $evaluation->anchorViewId
+                || $rules->every(fn (Rule $rule) => ($this->evaluateRule)($rule, $evaluation->context));
             $parentVisible = $view->parent_id === null || ($visibility[$view->parent_id] ?? false);
 
             $visibility[$view->id] = $ownRuleVisible && $parentVisible;
@@ -40,7 +34,7 @@ final class ApplyVisibility
 
         $evaluation->pendingAnswers = collect($evaluation->pendingAnswers)->filter(fn ($answer) => $visibility[$answer->viewId] ?? false)->values()->toArray();
 
-        $this->pruneInvisible($evaluation->componentContexts[ComponentType::Scope->value] ?? collect(), $visibility);
+        $this->pruneInvisible($scope, $visibility);
 
         return $next($evaluation);
     }
