@@ -1,7 +1,7 @@
 <?php
 
 use App\Actions\DTO\PendingAnswer;
-use App\Actions\Rules\CommitConfigurationAnswers;
+use App\Actions\CommitConfigurationAnswers;
 use App\Models\Answer;
 use App\Models\AnswerChunk;
 use App\Models\Component;

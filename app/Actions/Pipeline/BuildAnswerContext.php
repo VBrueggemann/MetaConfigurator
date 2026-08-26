@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Actions\Rules;
+namespace App\Actions\Pipeline;
 
 use App\Actions\DTO\ConfigurationEvaluation;
 use App\Actions\DTO\PendingAnswer;

@@ -2,9 +2,9 @@
 
 use App\Actions\DTO\ConfigurationEvaluation;
 use App\Actions\DTO\PendingAnswer;
-use App\Actions\Rules\BuildAnswerContext;
-use App\Actions\Rules\CommitConfigurationAnswers;
-use App\Actions\Rules\FetchConfigurationState;
+use App\Actions\CommitConfigurationAnswers;
+use App\Actions\FetchConfigurationState;
+use App\Actions\Pipeline\BuildAnswerContext;
 use App\Models\Answer;
 use App\Models\Component;
 use App\Models\Configuration;

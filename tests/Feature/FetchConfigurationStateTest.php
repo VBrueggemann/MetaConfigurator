@@ -1,7 +1,7 @@
 <?php
 
 use App\Actions\DTO\PendingAnswer;
-use App\Actions\Rules\FetchConfigurationState;
+use App\Actions\FetchConfigurationState;
 use App\Models\Answer;
 use App\Models\Component;
 use App\Models\Configuration;
@@ -136,6 +136,24 @@ it('ignores a requested anchor that is not an existing relevant chunk, falling b
     $evaluation = app(FetchConfigurationState::class)($configuration, [], $groupTwo->id);
 
     expect($evaluation->anchorViewId)->toBe($groupOne->id);
+});
+
+it('validates a pending answer even on a currently hidden view (fetch is a live preview, not an enforcement gate)', function () {
+    $configurator = Configurator::factory()->create();
+    $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $diet = View::factory()->textInput()->childOf($group)->create();
+    $allergy = View::factory()->textInput()->childOf($group)->create();
+
+    Rule::factory()->visibility("answers['{$diet->id}'] == 'vegan'")->create(['view_id' => $allergy->id]);
+    Rule::factory()->validation("answers['{$allergy->id}'] != null")->create(['view_id' => $allergy->id]);
+
+    $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
+    answer($configuration, $diet, 'omnivore');
+
+    $evaluation = app(FetchConfigurationState::class)($configuration, [new PendingAnswer($allergy->id, null)]);
+
+    expect($evaluation->componentContexts['visibility'][$allergy->id])->toBeFalse();
+    expect($evaluation->componentContexts['validation'])->toHaveKey($allergy->id);
 });
 
 it('does not advance scope from a pending answer alone', function () {

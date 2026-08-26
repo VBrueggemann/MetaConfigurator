@@ -1,8 +1,8 @@
 <?php
 
+use App\Actions\CommitConfigurationAnswers;
 use App\Actions\DTO\PendingAnswer;
-use App\Actions\Rules\CommitConfigurationAnswers;
-use App\Actions\Rules\FetchConfigurationState;
+use App\Actions\FetchConfigurationState;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\View;

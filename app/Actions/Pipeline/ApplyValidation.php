@@ -1,17 +1,20 @@
 <?php
 
-namespace App\Actions\Rules;
+namespace App\Actions\Pipeline;
 
 use App\Actions\DTO\ConfigurationEvaluation;
 use App\Enums\ComponentType;
 use App\Enums\RuleComponent;
+use App\Exceptions\ValidationFailedException;
 use App\Models\View;
 use Closure;
 
 final class ApplyValidation
 {
     public function __construct(
-        private readonly EvaluateRule $evaluateRule
+        private readonly EvaluateRule $evaluateRule,
+        private readonly bool $requireVisible,
+        private readonly bool $throwOnFailure,
     ) {}
 
     protected array $errors = [];
@@ -26,6 +29,10 @@ final class ApplyValidation
             $this->validate($rootView, $evaluation->context, $pendingViews, $visibility);
         }
 
+        if ($this->throwOnFailure && $this->errors !== []) {
+            throw new ValidationFailedException($this->errors);
+        }
+
         $evaluation->componentContexts[ComponentType::Validation->value] = $this->errors;
 
         return $next($evaluation);
@@ -36,7 +43,9 @@ final class ApplyValidation
      */
     private function validate(View $view, array $context, array $pendingViews, array $visibility)
     {
-        if (($visibility[$view->id] ?? true) && in_array($view->id, $pendingViews)) {
+        $isVisible = ! $this->requireVisible || ($visibility[$view->id] ?? true);
+
+        if ($isVisible && in_array($view->id, $pendingViews)) {
             $rules = $view->rules->filter(fn ($rule) => $rule->component === RuleComponent::Validation);
 
             foreach ($rules as $rule) {

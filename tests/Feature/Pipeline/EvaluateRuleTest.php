@@ -1,6 +1,6 @@
 <?php
 
-use App\Actions\Rules\EvaluateRule;
+use App\Actions\Pipeline\EvaluateRule;
 use App\Enums\RuleComponent;
 use App\Models\Rule;
 

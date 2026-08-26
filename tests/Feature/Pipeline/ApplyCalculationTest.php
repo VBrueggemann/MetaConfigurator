@@ -1,7 +1,7 @@
 <?php
 
 use App\Actions\DTO\PendingAnswer;
-use App\Actions\Rules\FetchConfigurationState;
+use App\Actions\FetchConfigurationState;
 use App\Models\Component;
 use App\Models\Configuration;
 use App\Models\Configurator;

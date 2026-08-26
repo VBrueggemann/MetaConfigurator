@@ -1,6 +1,6 @@
 <?php
 
-use App\Actions\Rules\EvaluateExpression;
+use App\Actions\Pipeline\EvaluateExpression;
 use App\Models\Answer;
 use App\Models\Configuration;
 use App\Models\View;

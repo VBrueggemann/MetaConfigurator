@@ -2,10 +2,10 @@
 
 namespace App\Livewire;
 
+use App\Actions\CommitConfigurationAnswers;
 use App\Actions\DTO\PendingAnswer;
+use App\Actions\FetchConfigurationState;
 use App\Actions\GetCurrentConfiguration;
-use App\Actions\Rules\CommitConfigurationAnswers;
-use App\Actions\Rules\FetchConfigurationState;
 use App\Enums\ViewType;
 use App\Models\Answer;
 use App\Models\Configuration;
