@@ -212,3 +212,11 @@ it('does not name a public action after one of Livewire\'s reserved $wire magic 
 
     expect($ownPublicMethods->intersect($reservedWireAliases))->toBeEmpty();
 });
+
+it('re-renders without error on a no-op request that updates no property and calls no method', function () {
+    $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator]);
+
+    $component->call('$refresh');
+
+    $component->assertOk();
+});

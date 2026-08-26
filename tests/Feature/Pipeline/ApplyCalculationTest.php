@@ -76,3 +76,36 @@ it('throws a clear error on a circular formula dependency', function () {
     expect(fn () => app(FetchConfigurationState::class)($configuration))
         ->toThrow(RuntimeException::class, "Circular calculation dependency involving 'a'.");
 });
+
+it('falls back to 0 instead of crashing when a formula fails to evaluate', function () {
+    $configurator = Configurator::factory()->create();
+    $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $quantity = View::factory()->number()->childOf($group)->create();
+
+    Component::factory()->calculation([
+        'subtotal' => "answer('{$quantity->id}') * 2",
+    ])->create(['configurator_id' => $configurator->id]);
+
+    $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
+
+    $evaluation = app(FetchConfigurationState::class)($configuration, [new PendingAnswer($quantity->id, '1--')]);
+
+    expect($evaluation->context['calculation']->subtotal)->toBe(0);
+});
+
+it('lets a downstream formula see 0 when the formula it references failed to evaluate', function () {
+    $configurator = Configurator::factory()->create();
+    $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $quantity = View::factory()->number()->childOf($group)->create();
+
+    Component::factory()->calculation([
+        'subtotal' => "answer('{$quantity->id}') * 2",
+        'total' => 'calculation.subtotal + 5',
+    ])->create(['configurator_id' => $configurator->id]);
+
+    $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
+
+    $evaluation = app(FetchConfigurationState::class)($configuration, [new PendingAnswer($quantity->id, '1--')]);
+
+    expect($evaluation->context['calculation']->total)->toBe(5);
+});

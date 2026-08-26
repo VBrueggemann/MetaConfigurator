@@ -237,6 +237,11 @@ class PlayConfigurator extends Component
 
     public function render(): ViewContract
     {
+        if (! isset($this->scopeViews)) {
+            $this->fetch(advanceScope: true);
+            $this->loadValues();
+        }
+
         return view('livewire.play-configurator', [
             'items' => $this->items(),
             'breadcrumbs' => $this->breadcrumbs(),

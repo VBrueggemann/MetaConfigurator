@@ -7,6 +7,7 @@ use App\Enums\ComponentType;
 use App\Models\Component;
 use Closure;
 use RuntimeException;
+use Throwable;
 
 final class ApplyCalculation
 {
@@ -41,7 +42,13 @@ final class ApplyCalculation
         $results = [];
 
         foreach ($this->topologicalOrder($formulas) as $name) {
-            $results[$name] = ($this->evaluateExpression)($formulas[$name], [...$context, 'calculation' => (object) $results]);
+            try {
+                $results[$name] = ($this->evaluateExpression)($formulas[$name], [...$context, 'calculation' => (object) $results]);
+            } catch (Throwable $e) {
+                report($e);
+
+                $results[$name] = 0;
+            }
         }
 
         return $results;
