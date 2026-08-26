@@ -29,3 +29,16 @@ it('still orders children by their order column', function () {
 
     expect($root->children->pluck('id')->all())->toBe([$first->id, $second->id]);
 });
+
+it('flattens a tree built by toTree() back into its original depth-first list', function () {
+    $configurator = Configurator::factory()->create();
+    $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $child = View::factory()->group()->childOf($root)->create();
+    $grandchild = View::factory()->textInput()->childOf($child)->create();
+    $sibling = View::factory()->textInput()->childOf($root)->create(['order' => 1]);
+
+    $flat = $root->descendantsAndSelf()->depthFirst()->get();
+
+    expect($flat->toTree()->toList()->pluck('id')->all())->toBe($flat->pluck('id')->all())
+        ->and([$root->id, $child->id, $grandchild->id, $sibling->id])->toBe($flat->pluck('id')->all());
+});
