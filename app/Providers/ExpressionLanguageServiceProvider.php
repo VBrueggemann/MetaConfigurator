@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Actions\Pipeline\ResolveTemplateField;
 use Illuminate\Support\ServiceProvider;
 use Symfony\Component\ExpressionLanguage\ExpressionLanguage;
 
@@ -25,6 +26,18 @@ class ExpressionLanguageServiceProvider extends ServiceProvider
                 'count',
                 fn ($value) => sprintf('count((array) (%s))', $value),
                 fn (array $arguments, $value) => count((array) $value),
+            );
+
+            $expressionLanguage->register(
+                'label',
+                fn ($id) => sprintf('label(%s)', $id),
+                fn (array $arguments, $id) => app(ResolveTemplateField::class)($arguments, 'views', (string) $id, 'label'),
+            );
+
+            $expressionLanguage->register(
+                'message',
+                fn ($id) => sprintf('message(%s)', $id),
+                fn (array $arguments, $id) => app(ResolveTemplateField::class)($arguments, 'rules', (string) $id, 'message'),
             );
 
             return $expressionLanguage;

@@ -10,7 +10,9 @@ use App\Actions\Pipeline\ApplyFlow;
 use App\Actions\Pipeline\ApplyValidation;
 use App\Actions\Pipeline\ApplyVisibility;
 use App\Actions\Pipeline\BuildAnswerContext;
+use App\Actions\Pipeline\BuildTemplateFieldContext;
 use App\Actions\Pipeline\GuardAnchorOverride;
+use App\Actions\Pipeline\ResolveTemplateStrings;
 use App\Models\Configuration;
 use Illuminate\Pipeline\Pipeline;
 
@@ -18,6 +20,7 @@ final class FetchConfigurationState
 {
     public const array PREFIX = [
         GuardAnchorOverride::class,
+        BuildTemplateFieldContext::class,
         BuildAnswerContext::class,
         ApplyCalculation::class,
         ApplyFlow::class,
@@ -42,6 +45,7 @@ final class FetchConfigurationState
             ->send($evaluation)
             ->through([
                 ...self::PREFIX,
+                ResolveTemplateStrings::class,
                 app(ApplyValidation::class, ['requireVisible' => false, 'throwOnFailure' => false]),
                 ApplyBreadcrumbs::class,
             ])
