@@ -6,6 +6,7 @@ use App\Actions\DTO\ConfigurationEvaluation;
 use App\Actions\DTO\PendingAnswer;
 use App\Actions\Pipeline\ApplyValidation;
 use App\Actions\Pipeline\CommitAnswers;
+use App\Actions\Pipeline\ResolveTemplateStrings;
 use App\Actions\Pipeline\SupersedeAnswerChunks;
 use App\Enums\ComponentType;
 use App\Exceptions\ValidationFailedException;
@@ -33,6 +34,7 @@ final class CommitConfigurationAnswers
                 ->send($evaluation)
                 ->through([
                     ...FetchConfigurationState::PREFIX,
+                    ResolveTemplateStrings::class,
                     app(ApplyValidation::class, ['requireVisible' => true, 'throwOnFailure' => true]),
                     SupersedeAnswerChunks::class,
                     CommitAnswers::class,

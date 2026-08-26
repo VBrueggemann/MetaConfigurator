@@ -13,7 +13,6 @@ final class ApplyValidation
 {
     public function __construct(
         private readonly EvaluateRule $evaluateRule,
-        private readonly ResolveTemplate $resolveTemplate,
         private readonly bool $requireVisible,
         private readonly bool $throwOnFailure,
     ) {}
@@ -51,7 +50,7 @@ final class ApplyValidation
 
             foreach ($rules as $rule) {
                 if (! ($this->evaluateRule)($rule, $context)) {
-                    $this->errors[$view->id][] = ($this->resolveTemplate)($rule->meta['message'] ?? 'invalid', $context);
+                    $this->errors[$view->id][] = $rule->meta['message'] ?? 'invalid';
                 }
             }
         }
