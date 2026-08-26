@@ -87,3 +87,21 @@ it('leaves a plain group without the multiselect widget rendering children indep
 
     $component->assertSeeHtml('type="checkbox"');
 });
+
+it('lays a plain group out as a vertical flex column by default', function () {
+    $plainGroup = View::factory()->group()->childOf($this->root)->create(['order' => 1]);
+    View::factory()->checkbox('Gluten free?')->childOf($plainGroup)->create(['order' => 0]);
+
+    $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator]);
+
+    $component->assertSeeHtml('class="flex flex-col space-y-6"');
+});
+
+it('lays a group with direction horizontal out as a wrapping flex row', function () {
+    $horizontalGroup = View::factory()->group(direction: 'horizontal')->childOf($this->root)->create(['order' => 1]);
+    View::factory()->checkbox('Gluten free?')->childOf($horizontalGroup)->create(['order' => 0]);
+
+    $component = Livewire::test(PlayConfigurator::class, ['configurator' => $this->configurator]);
+
+    $component->assertSeeHtml('class="flex flex-row flex-wrap gap-4"');
+});

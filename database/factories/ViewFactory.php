@@ -28,11 +28,14 @@ class ViewFactory extends Factory
         ];
     }
 
-    public function group(?string $label = null): static
+    public function group(?string $label = null, ?string $direction = null): static
     {
         return $this->state(fn () => [
             'type' => ViewType::Group,
-            'config' => $label === null ? [] : ['label' => $label],
+            'config' => array_filter([
+                'label' => $label,
+                'direction' => $direction,
+            ], fn ($value) => $value !== null),
         ]);
     }
 
