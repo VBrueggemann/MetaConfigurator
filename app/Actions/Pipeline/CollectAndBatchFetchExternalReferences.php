@@ -23,10 +23,16 @@ final class CollectAndBatchFetchExternalReferences
             ->where('type', ComponentType::Calculation)
             ->first()?->config['formulas'] ?? [];
 
-        $referencedIds = $this->scanReferences(array_keys($functions), [
-            ...$scopeViewsById->flatMap(fn (View $view): array => $this->templatableStrings($view))->all(),
-            ...array_values($formulas),
-        ]);
+        $referencedIds = [
+            ...$this->scanReferences(array_keys($functions), [
+                ...$scopeViewsById->flatMap(fn (View $view): array => $this->templatableStrings($view))->all(),
+                ...array_values($formulas),
+            ]),
+            ...$scopeViewsById->filter(
+                fn (View $view): bool => $this->referencesThis(array_keys($functions), $view->rules->pluck('expression')->all())
+            )->keys()->all(),
+        ];
+        $referencedIds = array_values(array_unique($referencedIds));
 
         $inScopeIds = array_values(array_intersect($referencedIds, $scopeViewsById->keys()->all()));
         $externalIds = array_values(array_diff($referencedIds, $inScopeIds));
@@ -79,5 +85,20 @@ final class CollectAndBatchFetchExternalReferences
         preg_match_all($pattern, implode(' ', $strings), $matches);
 
         return array_values(array_unique($matches[2]));
+    }
+
+    /**
+     * @param  list<string>  $functionNames
+     * @param  list<string>  $expressions
+     */
+    private function referencesThis(array $functionNames, array $expressions): bool
+    {
+        if ($functionNames === []) {
+            return false;
+        }
+
+        $pattern = '/\b('.implode('|', $functionNames).')\(\s*this\s*\)/';
+
+        return preg_match($pattern, implode(' ', $expressions)) === 1;
     }
 }

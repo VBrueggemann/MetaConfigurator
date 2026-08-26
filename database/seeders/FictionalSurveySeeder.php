@@ -30,15 +30,15 @@ class FictionalSurveySeeder extends Seeder
         Rule::factory()->visibility("answer('{$diet->id}') == 'vegan'")
             ->create(['view_id' => $allergy->id]);
 
-        Rule::factory()->validation("answer('{$name->id}') != null && strlen(answer('{$name->id}')) > 0")
+        Rule::factory()->validation('answer(this) != null && strlen(answer(this)) > 0')
             ->create(['view_id' => $name->id, 'meta' => ['message' => 'Please tell us your name.']]);
-        Rule::factory()->validation("answer('{$name->id}') == null || strlen(answer('{$name->id}')) <= 50")
+        Rule::factory()->validation('answer(this) == null || strlen(answer(this)) <= 50')
             ->create(['view_id' => $name->id, 'meta' => ['message' => 'Name must be 50 characters or fewer.']]);
 
-        Rule::factory()->validation("answer('{$diet->id}') != null && strlen(answer('{$diet->id}')) > 0")
+        Rule::factory()->validation('answer(this) != null && strlen(answer(this)) > 0')
             ->create(['view_id' => $diet->id, 'meta' => ['message' => 'Please tell us your diet.']]);
 
-        Rule::factory()->validation("answer('{$allergy->id}') != null && strlen(answer('{$allergy->id}')) > 0")
+        Rule::factory()->validation('answer(this) != null && strlen(answer(this)) > 0')
             ->create(['view_id' => $allergy->id, 'meta' => ['message' => 'Please tell us about your allergy.']]);
 
         Rule::factory()->flow("answer('{$aboutYou->id}') != null && answer('{$allergy->id}') == null", $normalEnd->id)

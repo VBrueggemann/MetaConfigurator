@@ -35,7 +35,7 @@ class WidgetShowcaseSeeder extends Seeder
             ->childOf($step1)->create(['order' => 1]);
 
         Rule::factory()->validation(
-            "answer('{$limitedText->id}') == null || strlen(answer('{$limitedText->id}')) <= answer('{$maxChars->id}')"
+            "answer(this) == null || strlen(answer(this)) <= answer('{$maxChars->id}')"
         )->create(['view_id' => $limitedText->id, 'meta' => ['message' => 'Text exceeds the allowed character limit.']]);
 
         $traits = View::factory()->multiselectGroup('Pick your strengths')->childOf($step2)->create(['order' => 0]);

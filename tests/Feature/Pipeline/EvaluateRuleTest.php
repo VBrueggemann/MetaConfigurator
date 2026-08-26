@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\DTO\PendingAnswer;
 use App\Actions\Pipeline\EvaluateRule;
 use App\Enums\RuleComponent;
 use App\Models\Rule;
@@ -24,4 +25,17 @@ it('returns false rather than throwing when the expression references an unknown
     $rule = Rule::factory()->make(['expression' => "answer('missing') == 'x'"]);
 
     expect(app(EvaluateRule::class)($rule, ['modelsById' => [View::class => []]]))->toBeFalse();
+});
+
+it('resolves this to the rule\'s own view_id', function () {
+    $view = View::factory()->textInput()->create();
+    $view->setRelation('descendants', collect());
+    $rule = Rule::factory()->make(['view_id' => $view->id, 'expression' => "answer(this) == 'x'"]);
+    $context = [
+        'modelsById' => [View::class => [$view->id => $view]],
+        'relevantAnswers' => collect(),
+        'pendingAnswers' => [new PendingAnswer($view->id, 'x')],
+    ];
+
+    expect(app(EvaluateRule::class)($rule, $context))->toBeTrue();
 });

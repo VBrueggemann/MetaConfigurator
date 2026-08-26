@@ -120,3 +120,16 @@ it('loads descendants for an in-scope group referenced by answer() without an ex
 
     expect($evaluation->context['modelsById'][View::class][$root->id]->relationLoaded('descendants'))->toBeTrue();
 });
+
+it('loads descendants for a group whose own rule references answer(this)', function () {
+    $configurator = Configurator::factory()->create();
+    $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    Rule::factory()->visibility('answer(this) == true')->create(['view_id' => $root->id]);
+    Component::factory()->scope(0)->create(['configurator_id' => $configurator->id]);
+
+    $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
+
+    $evaluation = collectExternalReferences($configuration);
+
+    expect($evaluation->context['modelsById'][View::class][$root->id]->relationLoaded('descendants'))->toBeTrue();
+});

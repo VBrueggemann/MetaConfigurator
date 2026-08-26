@@ -14,7 +14,7 @@ final class EvaluateRule
     public function __invoke(Rule $rule, array $context): bool
     {
         try {
-            return (bool) ($this->evaluateExpression)($rule->expression, $context);
+            return (bool) ($this->evaluateExpression)($rule->expression, [...$context, 'this' => $rule->view_id]);
         } catch (Throwable) {
             return false;
         }
