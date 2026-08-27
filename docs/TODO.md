@@ -65,7 +65,14 @@ run the full stage pipeline on every navigation *and* on every `wire:model.live`
       steps; worth batching (`insert()`) if/when a step type with many fields per submission (e.g. a
       matrix/group step) becomes common.
 
-- [ ] **No query-count regression guard on the pipeline.**
-      Only `tests/Feature/Pipeline/CollectAndBatchFetchExternalReferencesTest.php` asserts query counts.
-      Nothing catches an N+1 regression in `ApplyFlow` or the full pipeline. Add an `assertQueryCount`-style
-      test once the above items are addressed, so the fix doesn't silently regress.
+- [x] **No query-count regression guard on the pipeline.**
+      Fixed 2026-08-27: `tests/Feature/Pipeline/PipelineQueryCountTest.php` guards the full read pipeline
+      (`FetchConfigurationState`) and the write pipeline (`CommitConfigurationAnswers`) against N+1
+      regressions by comparing query counts between a small and a large scenario, rather than asserting a
+      brittle absolute number — a regression is "this now scales with size," which a fixed-count assertion
+      wouldn't distinguish from an unrelated incidental change. Covers: query count is flat as the number of
+      fields in the current step grows, as the rest of the configurator tree grows, and as the number of
+      already-answered steps (breadcrumbs) grows. Deliberately does *not* assert flatness for `CommitAnswers`
+      across a growing number of *pending answers in one commit* — that's the still-open N-individual-inserts
+      item above; the write-pipeline test here only varies unrelated tree size for a single answer, which is
+      already flat today.
