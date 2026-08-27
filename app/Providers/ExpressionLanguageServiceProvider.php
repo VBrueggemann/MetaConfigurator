@@ -3,7 +3,9 @@
 namespace App\Providers;
 
 use App\Actions\Pipeline\ResolveModelFunction;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\ServiceProvider;
+use Symfony\Component\Cache\Adapter\RedisAdapter;
 use Symfony\Component\ExpressionLanguage\ExpressionLanguage;
 
 class ExpressionLanguageServiceProvider extends ServiceProvider
@@ -14,7 +16,9 @@ class ExpressionLanguageServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(ExpressionLanguage::class, function () {
-            $expressionLanguage = new ExpressionLanguage;
+            $cache = new RedisAdapter(Redis::connection('cache')->client(), 'expression_language');
+
+            $expressionLanguage = new ExpressionLanguage($cache);
 
             $expressionLanguage->register(
                 'strlen',

@@ -28,13 +28,36 @@ run the full stage pipeline on every navigation *and* on every `wire:model.live`
       Groups. See `tests/Feature/Pipeline/CollectAndBatchFetchExternalReferencesTest.php` ("does not load
       descendants for a non-group view referenced by answer()").
 
-- [ ] **`ExpressionLanguage` has no persistent parse cache.**
-      `app/Providers/ExpressionLanguageServiceProvider.php:16` — `new ExpressionLanguage` with no PSR-6
-      cache adapter. Rule/formula/template expressions are static per configurator version but get
-      re-parsed from source on every request (no cache survives past the current PHP-FPM process). Wire
-      up a persistent adapter (Redis/file) keyed on expression + variable names. Pick up when profiling
-      shows CPU time in `symfony/expression-language` parsing, or opportunistically alongside the
-      `ApplyFlow` work since both are hit on every pipeline run.
+- [x] **`ExpressionLanguage` has no persistent parse cache.**
+      Fixed 2026-08-27: `ExpressionLanguageServiceProvider` now constructs the singleton with a
+      `Symfony\Component\Cache\Adapter\RedisAdapter` (namespace `expression_language`), wrapping the raw
+      phpredis client from Laravel's `cache` Redis connection (`Redis::connection('cache')->client()`) —
+      not `Cache::store('redis')`. Going through Laravel's `Cache` repository would run the `ParsedExpression`
+      AST through `unserialize(..., ['allowed_classes' => $this->serializableClasses])`
+      (`config/cache.php`'s `serializable_classes` is `false` by default), which strips every object in the
+      tree down to `__PHP_Incomplete_Class` — allowlisting it correctly would mean enumerating every
+      `Symfony\Component\ExpressionLanguage\Node\*` subclass and keeping that list in sync with the package.
+      `RedisAdapter` does its own `serialize()`/`unserialize()` with no such allowlist, sidestepping the
+      problem entirely; reusing Laravel's own Redis connection means no separate connection config. Added a
+      `redis` service to `compose.yaml` (Sail didn't have one) — forwarded on host port 6380
+      (`FORWARD_REDIS_PORT`), not the Sail default 6379, since another project's Redis container already
+      holds that port on this machine. `CACHE_STORE` is now `redis` and `REDIS_HOST` is `redis` (was
+      `127.0.0.1`, which never worked container-to-container). Verified the cache key lands in Redis db 1
+      (`metaconfigurator-database-expression_language:...`) and the full pipeline test suite (153 tests)
+      still passes.
+
+      Investigated whether to also cache *calculation results* keyed by dependency, per request, refreshing
+      when a dependency's answer changes — decided against for now. Formula dependencies (`answer(id)`,
+      `label(id)`, `validationError(id)`, `calculation.<name>`) are staticly extractable with the same
+      regex-scan technique `CollectAndBatchFetchExternalReferences` already uses, so a content-hash cache key
+      would self-invalidate correctly (same accepted blind spot as elsewhere: a dynamically-computed id like
+      `answer(otherAnswer())` isn't discoverable by a static scan). But with the parse cache in place,
+      `evaluate()` against an already-parsed AST is a cheap in-process tree-walk — `answer()` itself is just
+      an in-memory `Collection::whereIn()` over already-loaded `relevantAnswers`, no extra queries — so a
+      result cache would trade that for a cache round-trip per formula, likely a net loss for typical formula
+      counts, for meaningfully more complexity. Revisit only if profiling *after* this fix still shows
+      `ApplyCalculation`'s `evaluate()` calls (not parsing) dominating for a configurator with many/expensive
+      formulas.
 
 - [ ] **`CommitAnswers` does N individual inserts instead of a bulk insert.**
       `app/Actions/Pipeline/CommitAnswers.php:22` — one `create()` call per pending answer inside the
