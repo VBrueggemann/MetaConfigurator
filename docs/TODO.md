@@ -59,11 +59,17 @@ run the full stage pipeline on every navigation *and* on every `wire:model.live`
       `ApplyCalculation`'s `evaluate()` calls (not parsing) dominating for a configurator with many/expensive
       formulas.
 
-- [ ] **`CommitAnswers` does N individual inserts instead of a bulk insert.**
-      `app/Actions/Pipeline/CommitAnswers.php:22` — one `create()` call per pending answer inside the
-      transaction, plus a separate `max('sequence')` query and a chunk `create()`. Fine for single-field
-      steps; worth batching (`insert()`) if/when a step type with many fields per submission (e.g. a
-      matrix/group step) becomes common.
+- [x] **`CommitAnswers` does N individual inserts instead of a bulk insert.**
+      Fixed 2026-08-27: `CommitAnswers` now builds one row array per pending answer and inserts them all via
+      a single `Answer::query()->insert(...)` call, instead of looping `$chunk->answers()->create([...])`.
+      Since a bulk `insert()` bypasses Eloquent's model events/casts, each row's `id` (UUID), `value`
+      (JSON-encoded — the model's `array` cast only applies on the `create()`/read path, not `insert()`), and
+      `created_at`/`updated_at` are now set explicitly in the mapped array rather than relying on `HasUuids`
+      and the cast to populate them. `tests/Feature/Pipeline/PipelineQueryCountTest.php` gained a case
+      asserting write-pipeline query count stays flat as the number of pending answers in one commit grows
+      (was previously a documented, deliberate gap in that file); `tests/Feature/CommitConfigurationAnswersTest.php`
+      gained a correctness case verifying every bulk-inserted `Answer` round-trips its `id`,
+      `configuration_id`, `answer_chunk_id`, `value` (through the array cast on read), and timestamps.
 
 - [x] **No query-count regression guard on the pipeline.**
       Fixed 2026-08-27: `tests/Feature/Pipeline/PipelineQueryCountTest.php` guards the full read pipeline

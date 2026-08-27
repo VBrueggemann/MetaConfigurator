@@ -138,6 +138,37 @@ it('resolves a failing rule\'s templated message before aborting the commit', fu
     expect(Answer::count())->toBe(0);
 });
 
+it('bulk-persists every pending answer in a single commit with correct data', function () {
+    $configurator = Configurator::factory()->create();
+    $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $name = View::factory()->textInput()->childOf($group)->create();
+    $age = View::factory()->textInput()->childOf($group)->create();
+
+    $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
+
+    app(CommitConfigurationAnswers::class)($configuration, [
+        new PendingAnswer($group->id, true),
+        new PendingAnswer($name->id, 'Ada'),
+        new PendingAnswer($age->id, 36),
+    ]);
+
+    $chunk = AnswerChunk::sole();
+    $answers = Answer::orderBy('view_id')->get()->keyBy('view_id');
+
+    expect($answers)->toHaveCount(3);
+    expect($answers[$group->id]->value)->toBeTrue();
+    expect($answers[$name->id]->value)->toBe('Ada');
+    expect($answers[$age->id]->value)->toBe(36);
+
+    foreach ($answers as $answer) {
+        expect($answer->id)->not->toBeNull();
+        expect($answer->configuration_id)->toBe($configuration->id);
+        expect($answer->answer_chunk_id)->toBe($chunk->id);
+        expect($answer->created_at)->not->toBeNull();
+        expect($answer->updated_at)->not->toBeNull();
+    }
+});
+
 it('re-validates on commit even without a prior fetch', function () {
     $configurator = Configurator::factory()->create();
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);

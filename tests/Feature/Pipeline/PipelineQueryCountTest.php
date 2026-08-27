@@ -109,3 +109,16 @@ it('runs the same number of write-pipeline queries for a single answer no matter
 
     expect($largeCount)->toBe($smallCount);
 });
+
+it('runs the same number of write-pipeline queries no matter how many pending answers are committed at once', function () {
+    $few = buildStepConfigurator(fieldCount: 2);
+    $many = buildStepConfigurator(fieldCount: 12);
+
+    $fewAnswers = $few->fields->map(fn (View $field) => new PendingAnswer($field->id, 'value'))->all();
+    $manyAnswers = $many->fields->map(fn (View $field) => new PendingAnswer($field->id, 'value'))->all();
+
+    $fewCount = countQueries(fn () => app(CommitConfigurationAnswers::class)($few->configuration, $fewAnswers));
+    $manyCount = countQueries(fn () => app(CommitConfigurationAnswers::class)($many->configuration, $manyAnswers));
+
+    expect($manyCount)->toBe($fewCount);
+});
