@@ -82,3 +82,34 @@ run the full stage pipeline on every navigation *and* on every `wire:model.live`
       across a growing number of *pending answers in one commit* — that's the still-open N-individual-inserts
       item above; the write-pipeline test here only varies unrelated tree size for a single answer, which is
       already flat today.
+
+Found via re-profiling on 2026-08-27, after the five items above landed.
+
+- [ ] **Chunked flow-rule scan can turn one query into several for a large, mostly-unanswered tree.**
+      `ApplyFlow::findFlowTarget` (`app/Actions/Pipeline/ApplyFlow.php:97-102`) fetches
+      `Rule::whereIn('view_id', chunk)` per 25-view chunk (`FLOW_RULE_CHUNK_SIZE`), stopping at the first
+      firing rule. Worst case — a fresh Configuration on a large tree, nothing answered yet — is now
+      `ceil(candidates / 25)` sequential queries, where the pre-fix code paid for this once via the
+      already-eager-loaded `rules` on the single full-tree query. `PipelineQueryCountTest`'s "large tree"
+      case only builds `extraStepCount: 15`, under the chunk size, so it doesn't exercise the multi-chunk
+      path and wouldn't catch a regression here. Pick up when: profiling shows multiple `Rule` queries on a
+      cold load of a configurator with >25 unanswered top-level steps, or add a test case that pushes past
+      the chunk size to confirm the trade-off is acceptable as-is.
+
+- [ ] **Redis-backed expression parse cache has no in-request memoization.**
+      `ExpressionLanguage::parse()` calls `$this->cache->getItem(...)` unconditionally
+      (`vendor/symfony/expression-language/ExpressionLanguage.php:80`) — no short-circuit before the cache
+      lookup. Since `ExpressionLanguageServiceProvider` now backs that cache with `RedisAdapter`
+      (`app/Providers/ExpressionLanguageServiceProvider.php:19-21`), every `evaluate()` call is a real Redis
+      round-trip, not just a re-parse. A scope with ~20 rules/labels/formulas means ~20+ sequential Redis GETs
+      per pipeline run, on every `wire:model.live` keystroke. Locally sub-ms per call, but worth checking
+      under real latency. Fix: stack an in-memory `ArrayAdapter` in front via
+      `Symfony\Component\Cache\Adapter\ChainAdapter` so repeated evaluations within one request skip Redis
+      entirely. Pick up when: profiling shows Redis round-trip time dominating a request, or opportunistically
+      alongside other `ExpressionLanguage` work.
+
+      Related, lower-priority: cached ASTs have no TTL (`RedisAdapter`'s `defaultLifetime` defaults to `0` —
+      `ExpressionLanguageServiceProvider.php:19` doesn't pass one), and the `redis` service in `compose.yaml`
+      has no memory limit or eviction policy. Every rule/formula/label edit mints a new cache key; old ones
+      never expire. Not urgent, but worth a TTL or `maxmemory-policy` before this runs unattended in
+      production for a long time.
