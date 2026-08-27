@@ -30,12 +30,12 @@ class TemplatingShowcaseSeeder extends Seeder
             'lastNameRemaining' => "{$maxLength} - calculation.lastNameLength",
         ])->create(['configurator_id' => $configurator->id]);
 
-        $firstNameRule = Rule::factory()->validation("calculation.firstNameLength <= {$maxLength}")->create([
+        Rule::factory()->validation("calculation.firstNameLength <= {$maxLength}")->create([
             'view_id' => $firstName->id,
             'meta' => ['message' => "'{{ answer('{$firstName->id}') }}' is {{ calculation.firstNameLength - {$maxLength} }} characters over the limit"],
         ]);
 
-        $lastNameRule = Rule::factory()->validation("calculation.lastNameLength <= {$maxLength}")->create([
+        Rule::factory()->validation("calculation.lastNameLength <= {$maxLength}")->create([
             'view_id' => $lastName->id,
             'meta' => ['message' => "'{{ answer('{$lastName->id}') }}' is {{ calculation.lastNameLength - {$maxLength} }} characters over the limit"],
         ]);
@@ -46,7 +46,7 @@ class TemplatingShowcaseSeeder extends Seeder
             "Answer: {{ answer('{$firstName->id}') }}",
             'Character count: {{ calculation.firstNameLength }}',
             'Characters left before the limit triggers: {{ calculation.firstNameRemaining }}',
-            "Validation message preview: {{ message('{$firstNameRule->id}') }}",
+            "Validation message preview: {{ validationError('{$firstName->id}') }}",
         ])]]);
 
         $lastNameInfo = View::factory()->html('placeholder')->childOf($root)->create(['order' => 3]);
@@ -55,7 +55,7 @@ class TemplatingShowcaseSeeder extends Seeder
             "Answer: {{ answer('{$lastName->id}') }}",
             'Character count: {{ calculation.lastNameLength }}',
             'Characters left before the limit triggers: {{ calculation.lastNameRemaining }}',
-            "Validation message preview: {{ message('{$lastNameRule->id}') }}",
+            "Validation message preview: {{ validationError('{$lastName->id}') }}",
         ])]]);
 
         $this->command?->info('   Configurator: '.route('configurators.play', ['configurator' => $configurator]));

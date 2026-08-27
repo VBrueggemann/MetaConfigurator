@@ -50,6 +50,32 @@ return [
             'context' => ComponentType::Scope->value,
             'iterate' => function (Collection $views, Closure $visit): void {
                 $walk = function (View $view) use (&$walk, $visit): void {
+                    $view->rules->each($visit);
+                    $view->children->each($walk);
+                };
+
+                $views->each($walk);
+            },
+            'resolve' => function (Rule $rule, array $keys, ResolveTemplate $resolveTemplate, array $context): void {
+                $meta = $rule->meta;
+
+                foreach ($keys as $key => $resolver) {
+                    if (isset($meta[$key])) {
+                        $meta[$key] = $resolver($meta[$key], $resolveTemplate, $context);
+                    }
+                }
+
+                $rule->meta = $meta;
+            },
+            'keys' => [
+                'message' => fn (string $template, ResolveTemplate $resolveTemplate, array $context) => $resolveTemplate($template, $context),
+            ],
+        ],
+
+        [
+            'context' => ComponentType::Scope->value,
+            'iterate' => function (Collection $views, Closure $visit): void {
+                $walk = function (View $view) use (&$walk, $visit): void {
                     $visit($view);
                     $view->children->each($walk);
                 };
@@ -78,32 +104,6 @@ return [
                         $options,
                     );
                 },
-            ],
-        ],
-
-        [
-            'context' => ComponentType::Scope->value,
-            'iterate' => function (Collection $views, Closure $visit): void {
-                $walk = function (View $view) use (&$walk, $visit): void {
-                    $view->rules->each($visit);
-                    $view->children->each($walk);
-                };
-
-                $views->each($walk);
-            },
-            'resolve' => function (Rule $rule, array $keys, ResolveTemplate $resolveTemplate, array $context): void {
-                $meta = $rule->meta;
-
-                foreach ($keys as $key => $resolver) {
-                    if (isset($meta[$key])) {
-                        $meta[$key] = $resolver($meta[$key], $resolveTemplate, $context);
-                    }
-                }
-
-                $rule->meta = $meta;
-            },
-            'keys' => [
-                'message' => fn (string $template, ResolveTemplate $resolveTemplate, array $context) => $resolveTemplate($template, $context),
             ],
         ],
     ],
