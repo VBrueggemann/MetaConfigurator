@@ -96,17 +96,16 @@ Found via re-profiling on 2026-08-27, after the five items above landed.
       cold load of a configurator with >25 unanswered top-level steps, or add a test case that pushes past
       the chunk size to confirm the trade-off is acceptable as-is.
 
-- [ ] **Redis-backed expression parse cache has no in-request memoization.**
-      `ExpressionLanguage::parse()` calls `$this->cache->getItem(...)` unconditionally
-      (`vendor/symfony/expression-language/ExpressionLanguage.php:80`) — no short-circuit before the cache
-      lookup. Since `ExpressionLanguageServiceProvider` now backs that cache with `RedisAdapter`
-      (`app/Providers/ExpressionLanguageServiceProvider.php:19-21`), every `evaluate()` call is a real Redis
-      round-trip, not just a re-parse. A scope with ~20 rules/labels/formulas means ~20+ sequential Redis GETs
-      per pipeline run, on every `wire:model.live` keystroke. Locally sub-ms per call, but worth checking
-      under real latency. Fix: stack an in-memory `ArrayAdapter` in front via
-      `Symfony\Component\Cache\Adapter\ChainAdapter` so repeated evaluations within one request skip Redis
-      entirely. Pick up when: profiling shows Redis round-trip time dominating a request, or opportunistically
-      alongside other `ExpressionLanguage` work.
+- [x] **Redis-backed expression parse cache has no in-request memoization.**
+      Fixed 2026-08-27: `ExpressionLanguageServiceProvider` now wraps the `RedisAdapter` in a
+      `Symfony\Component\Cache\Adapter\ChainAdapter` with an `ArrayAdapter` in front
+      (`app/Providers/ExpressionLanguageServiceProvider.php`). `ChainAdapter::getItem()` checks the array
+      adapter first and only falls through to Redis on a miss, syncing the result back into the array adapter
+      — so within one request (there's no Octane; the `ExpressionLanguage` singleton is rebuilt per request),
+      the first `parse()` of a given expression pays for the Redis round-trip and every repeat parse of that
+      same expression is served from memory. `tests/Feature/ExpressionLanguageServiceProviderTest.php` asserts
+      the cache is a `ChainAdapter` with an `ArrayAdapter` as its first member, and that parsing an expression
+      once populates that array adapter under the same cache key `ExpressionLanguage::parse()` derives.
 
       Related, lower-priority: cached ASTs have no TTL (`RedisAdapter`'s `defaultLifetime` defaults to `0` —
       `ExpressionLanguageServiceProvider.php:19` doesn't pass one), and the `redis` service in `compose.yaml`
