@@ -4,19 +4,24 @@ namespace App\Actions\Pipeline;
 
 use App\Actions\DTO\ConfigurationEvaluation;
 use App\Enums\ComponentType;
+use App\Enums\ViewType;
 use App\Models\Component;
 use App\Models\Rule;
 use App\Models\View;
 use Closure;
+use Illuminate\Support\Collection;
 
 final class CollectAndBatchFetchExternalReferences
 {
+    private const GROUP_ONLY_RELATIONS = ['descendants'];
+
     public function __invoke(ConfigurationEvaluation $evaluation, Closure $next): mixed
     {
         $scopeViewsById = collect($evaluation->componentContexts[ComponentType::Scope->value] ?? [])->toList()->keyBy('id');
 
         $functions = config('templating.functions.'.View::class, []);
         $with = collect($functions)->flatMap(fn (array $definition): array => $definition['with'])->unique()->values()->all();
+        $commonWith = array_values(array_diff($with, self::GROUP_ONLY_RELATIONS));
 
         $formulas = Component::query()
             ->where('configurator_id', $evaluation->configuration->configurator_id)
@@ -38,13 +43,15 @@ final class CollectAndBatchFetchExternalReferences
         $externalIds = array_values(array_diff($referencedIds, $inScopeIds));
 
         if ($inScopeIds !== []) {
-            $scopeViewsById->only($inScopeIds)->loadMissing($with);
+            $this->loadReferencedRelations($scopeViewsById->only($inScopeIds), $commonWith);
         }
 
         $modelsById = $scopeViewsById->all();
 
         if ($externalIds !== []) {
-            $modelsById += View::query()->whereIn('id', $externalIds)->with($with)->get()->keyBy('id')->all();
+            $externalViews = View::query()->whereIn('id', $externalIds)->with($commonWith)->get();
+            $this->loadReferencedRelations($externalViews, $commonWith);
+            $modelsById += $externalViews->keyBy('id')->all();
         }
 
         $evaluation->context['modelsById'][View::class] = $modelsById;
@@ -54,6 +61,19 @@ final class CollectAndBatchFetchExternalReferences
         $evaluation->context['pendingAnswers'] = $evaluation->pendingAnswers;
 
         return $next($evaluation);
+    }
+
+    /**
+     * @param  Collection<int|string, View>  $views
+     * @param  list<string>  $commonWith
+     */
+    private function loadReferencedRelations(Collection $views, array $commonWith): void
+    {
+        if ($commonWith !== []) {
+            $views->loadMissing($commonWith);
+        }
+
+        $views->filter(fn (View $view): bool => $view->type === ViewType::Group)->loadMissing(self::GROUP_ONLY_RELATIONS);
     }
 
     /**

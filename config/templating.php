@@ -3,6 +3,7 @@
 use App\Actions\Pipeline\ResolveTemplate;
 use App\Enums\ComponentType;
 use App\Enums\RuleComponent;
+use App\Enums\ViewType;
 use App\Models\Rule;
 use App\Models\View;
 use Illuminate\Support\Collection;
@@ -19,7 +20,9 @@ return [
             'answer' => [
                 'with' => ['descendants'],
                 'resolve' => function (View $view, array $context): mixed {
-                    $viewIds = [$view->id, ...$view->descendants->pluck('id')];
+                    $viewIds = $view->type === ViewType::Group
+                        ? [$view->id, ...$view->descendants->pluck('id')]
+                        : [$view->id];
 
                     $persisted = collect($context['relevantAnswers'] ?? [])->whereIn('view_id', $viewIds)->pluck('value', 'view_id');
                     $pending = ($context['__persistedOnly'] ?? false)

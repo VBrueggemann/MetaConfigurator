@@ -133,3 +133,18 @@ it('loads descendants for a group whose own rule references answer(this)', funct
 
     expect($evaluation->context['modelsById'][View::class][$root->id]->relationLoaded('descendants'))->toBeTrue();
 });
+
+it('does not load descendants for a non-group view referenced by answer()', function () {
+    $configurator = Configurator::factory()->create();
+    $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $source = View::factory()->textInput()->childOf($root)->create(['order' => 0]);
+    $target = View::factory()->textInput()->childOf($root)->create(['order' => 1]);
+    Rule::factory()->visibility("answer('{$source->id}') == 'x'")->create(['view_id' => $target->id]);
+    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
+
+    $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
+
+    $evaluation = collectExternalReferences($configuration);
+
+    expect($evaluation->context['modelsById'][View::class][$source->id]->relationLoaded('descendants'))->toBeFalse();
+});

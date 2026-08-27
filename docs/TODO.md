@@ -9,20 +9,24 @@ run the full stage pipeline on every navigation *and* on every `wire:model.live`
 (default for most widgets unless a view's `config['updateOn']` is `blur`) — see
 `app/Livewire/PlayConfigurator.php`'s `updatedValues()`.
 
-- [ ] **`ApplyFlow` loads the entire configurator tree on every request, not just the current scope.**
-      `app/Actions/Pipeline/ApplyFlow.php:31` — `$rootView->descendantsAndSelf()->with([...$with, 'rules'])->depthFirst()->get()`
-      fetches every View in the whole configurator (plus eager-loaded relations) on every read/write,
-      including live-keystroke updates. Cost scales with total configurator size, not current-step size.
-      Pick up when: a configurator with a large view tree shows slow field updates, or before onboarding
-      a customer with a big Configurator.
+- [x] **`ApplyFlow` loads the entire configurator tree on every request, not just the current scope.**
+      Fixed 2026-08-27: `ApplyFlow` no longer eager-loads `$with`/`rules` onto the full tree. The full-tree
+      fetch (still one recursive-CTE query — `path`/`depth` aren't materialized columns, so any depth-first
+      position lookup needs it) now selects only what navigation needs. The backward flow-rule scan is
+      chunked (`app/Actions/Pipeline/ApplyFlow.php` — `findFlowTarget`, `FLOW_RULE_CHUNK_SIZE`) and batch-fetches
+      only `component = Flow` rules for the candidate slice, stopping at the first firing rule instead of
+      loading rules for the whole tree. `$with` for a referenced view is now resolved lazily per matched rule
+      (`loadReferencedRelations`), reusing the scan approach `CollectAndBatchFetchExternalReferences` already
+      used. Worst case (nothing answered yet) still scans the remaining tree — that's inherent to "prefer the
+      latest firing rule" semantics, not a query-shape problem.
 
-- [ ] **`answer()`'s `descendants` eager load is applied to every View, not just Groups.**
-      `config/templating.php:20` registers `'with' => ['descendants']` for the `answer` function, and
-      `ApplyFlow` unions `$with` globally across all registered functions (`app/Actions/Pipeline/ApplyFlow.php:30`)
-      instead of per-view-type. Every leaf (non-Group) View eager-loads a `descendants` relation it never
-      uses; every Group node materializes a hydrated copy of its full subtree. Fix likely requires scoping
-      `$with` by `View::type` rather than unioning across the whole function registry. Pick up alongside the
-      `ApplyFlow` full-tree item above — same root cause.
+- [x] **`answer()`'s `descendants` eager load is applied to every View, not just Groups.**
+      Fixed 2026-08-27 alongside the item above. `config/templating.php`'s `answer` resolver now only reads
+      `$view->descendants` when `$view->type === ViewType::Group`. `ApplyFlow` and
+      `CollectAndBatchFetchExternalReferences` both split their eager-loaded relations into a common set and
+      `GROUP_ONLY_RELATIONS = ['descendants']`, loading the latter only for referenced views that are actually
+      Groups. See `tests/Feature/Pipeline/CollectAndBatchFetchExternalReferencesTest.php` ("does not load
+      descendants for a non-group view referenced by answer()").
 
 - [ ] **`ExpressionLanguage` has no persistent parse cache.**
       `app/Providers/ExpressionLanguageServiceProvider.php:16` — `new ExpressionLanguage` with no PSR-6

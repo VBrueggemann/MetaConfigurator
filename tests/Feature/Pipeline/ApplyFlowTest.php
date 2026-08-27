@@ -55,6 +55,26 @@ it('advances via an explicit Flow rule referencing a persisted answer', function
     expect($evaluation->anchorViewId)->toBe($groupThree->id);
 });
 
+it('advances via a Flow rule referencing the aggregated answer() of a nested group', function () {
+    $configurator = Configurator::factory()->create();
+    $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
+    $nestedGroup = View::factory()->group()->childOf($groupOne)->create(['order' => 0]);
+    $color = View::factory()->textInput()->childOf($nestedGroup)->create(['order' => 0]);
+    $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
+    $groupThree = View::factory()->group()->childOf($root)->create(['order' => 2]);
+    Rule::factory()->flow("answer('{$nestedGroup->id}') == 'red'", $groupThree->id)->create(['view_id' => $groupOne->id]);
+    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
+
+    $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
+    answer($configuration, $groupOne, true);
+    Answer::factory()->create(['configuration_id' => $configuration->id, 'view_id' => $color->id, 'value' => 'red']);
+
+    $evaluation = applyFlow($configuration);
+
+    expect($evaluation->anchorViewId)->toBe($groupThree->id);
+});
+
 it('bounds the flow-rule scan to the last-answered view, never reconsidering an earlier one', function () {
     $configurator = Configurator::factory()->create();
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
