@@ -39,8 +39,8 @@ final class FetchConfigurationState
                 CollectAndBatchFetchExternalReferences::class,
                 ApplyCalculation::class,
                 ApplyVisibility::class,
+                ApplyValidation::class,
                 ResolveTemplateStrings::class,
-                app(ApplyValidation::class, ['throwOnFailure' => false]),
                 ApplyBreadcrumbs::class,
             ])
             ->thenReturn();

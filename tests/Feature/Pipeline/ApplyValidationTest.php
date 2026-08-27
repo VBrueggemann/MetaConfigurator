@@ -5,7 +5,6 @@ use App\Actions\DTO\PendingAnswer;
 use App\Actions\Pipeline\ApplyFlow;
 use App\Actions\Pipeline\ApplyValidation;
 use App\Actions\Pipeline\CollectAndBatchFetchExternalReferences;
-use App\Exceptions\ValidationFailedException;
 use App\Models\Component;
 use App\Models\Configuration;
 use App\Models\Configurator;
@@ -15,7 +14,7 @@ use App\Models\View;
 /**
  * @param  array<string, mixed>  $pendingAnswers
  */
-function applyValidation(Configuration $configuration, array $pendingAnswers = [], bool $throwOnFailure = false): ConfigurationEvaluation
+function applyValidation(Configuration $configuration, array $pendingAnswers = []): ConfigurationEvaluation
 {
     $evaluation = new ConfigurationEvaluation($configuration, array_map(
         fn (string $viewId, mixed $value): PendingAnswer => new PendingAnswer($viewId, $value),
@@ -28,7 +27,7 @@ function applyValidation(Configuration $configuration, array $pendingAnswers = [
 
     app(ApplyFlow::class)($evaluation, fn (ConfigurationEvaluation $evaluation) => $evaluation);
     app(CollectAndBatchFetchExternalReferences::class)($evaluation, fn (ConfigurationEvaluation $evaluation) => $evaluation);
-    app(ApplyValidation::class, ['throwOnFailure' => $throwOnFailure])($evaluation, fn (ConfigurationEvaluation $evaluation) => $evaluation);
+    app(ApplyValidation::class)($evaluation, fn (ConfigurationEvaluation $evaluation) => $evaluation);
 
     return $evaluation;
 }
@@ -88,30 +87,4 @@ it('treats a group as pending when a descendant leaf is pending', function () {
     $evaluation = applyValidation($configuration, [$field->id => 'x']);
 
     expect(remainingValidationRules($evaluation, $group->id)->pluck('meta.message')->all())->toBe(['group invalid']);
-});
-
-it('throws ValidationFailedException when throwOnFailure and a failing rule remains', function () {
-    $configurator = Configurator::factory()->create();
-    $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
-    $field = View::factory()->textInput()->childOf($root)->create(['order' => 0]);
-    Rule::factory()->validation('false')->create(['view_id' => $field->id]);
-    Component::factory()->scope(0)->create(['configurator_id' => $configurator->id]);
-
-    $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
-
-    applyValidation($configuration, [$field->id => 'bad'], throwOnFailure: true);
-})->throws(ValidationFailedException::class);
-
-it('does not throw when throwOnFailure is set but nothing fails', function () {
-    $configurator = Configurator::factory()->create();
-    $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
-    $field = View::factory()->textInput()->childOf($root)->create(['order' => 0]);
-    Rule::factory()->validation('true')->create(['view_id' => $field->id]);
-    Component::factory()->scope(0)->create(['configurator_id' => $configurator->id]);
-
-    $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
-
-    $evaluation = applyValidation($configuration, [$field->id => 'ok'], throwOnFailure: true);
-
-    expect($evaluation)->not->toBeNull();
 });

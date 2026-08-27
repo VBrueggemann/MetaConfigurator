@@ -11,6 +11,7 @@ use App\Actions\Pipeline\ApplyVisibility;
 use App\Actions\Pipeline\CollectAndBatchFetchExternalReferences;
 use App\Actions\Pipeline\CommitAnswers;
 use App\Actions\Pipeline\GuardAnchorOverride;
+use App\Actions\Pipeline\GuardValidationFailure;
 use App\Actions\Pipeline\ResolveTemplateStrings;
 use App\Actions\Pipeline\SupersedeAnswerChunks;
 use App\Models\Configuration;
@@ -42,8 +43,9 @@ final class CommitConfigurationAnswers
                     CollectAndBatchFetchExternalReferences::class,
                     ApplyCalculation::class,
                     ApplyVisibility::class,
+                    ApplyValidation::class,
                     ResolveTemplateStrings::class,
-                    app(ApplyValidation::class, ['throwOnFailure' => true]),
+                    GuardValidationFailure::class,
                     SupersedeAnswerChunks::class,
                     CommitAnswers::class,
                 ])

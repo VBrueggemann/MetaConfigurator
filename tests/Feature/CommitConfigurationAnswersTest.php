@@ -118,6 +118,26 @@ it('persists nothing when any pending answer is invalid (all-or-nothing)', funct
     expect(Answer::count())->toBe(0);
 });
 
+it('resolves a failing rule\'s templated message before aborting the commit', function () {
+    $configurator = Configurator::factory()->create();
+    $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $name = View::factory()->textInput()->childOf($group)->create();
+    Rule::factory()->validation('false')->create([
+        'view_id' => $name->id,
+        'meta' => ['message' => "Must not be {{ answer('{$name->id}') }}"],
+    ]);
+
+    $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
+
+    $evaluation = app(CommitConfigurationAnswers::class)($configuration, [
+        new PendingAnswer($group->id, true),
+        new PendingAnswer($name->id, 'bad'),
+    ]);
+
+    expect(remainingValidationRules($evaluation, $name->id)->pluck('meta.message')->all())->toBe(['Must not be bad']);
+    expect(Answer::count())->toBe(0);
+});
+
 it('re-validates on commit even without a prior fetch', function () {
     $configurator = Configurator::factory()->create();
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);

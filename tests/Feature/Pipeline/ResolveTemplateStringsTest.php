@@ -94,11 +94,51 @@ it('resolves another view label and its validation error via label() and validat
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
-    $evaluation = app(FetchConfigurationState::class)($configuration);
+    $evaluation = app(FetchConfigurationState::class)($configuration, [new PendingAnswer($field->id, 'bad')]);
 
     $resolvedSummary = $evaluation->componentContexts['scope']->first()->children->firstWhere('id', $summary->id);
 
     expect($resolvedSummary->config['content'])->toBe('Field label: Shoe size | Rule says: bad value');
+});
+
+it('resolves validationError() as empty for a passing rule that gets pruned', function () {
+    $configurator = Configurator::factory()->create();
+    $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $field = View::factory()->textInput('Shoe size')->childOf($group)->create();
+    Rule::factory()->validation('true')->create(['view_id' => $field->id, 'meta' => ['message' => 'should not appear']]);
+
+    $summary = View::factory()->html('placeholder')->childOf($group)->create();
+    $summary->update(['config' => [
+        'content' => "Rule says: {{ validationError('{$field->id}') }}",
+    ]]);
+
+    $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
+
+    $evaluation = app(FetchConfigurationState::class)($configuration, [new PendingAnswer($field->id, 'ok')]);
+
+    $resolvedSummary = $evaluation->componentContexts['scope']->first()->children->firstWhere('id', $summary->id);
+
+    expect($resolvedSummary->config['content'])->toBe('Rule says: ');
+});
+
+it('resolves validationError() as empty for a failing rule on a view that was never pending', function () {
+    $configurator = Configurator::factory()->create();
+    $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
+    $field = View::factory()->textInput('Shoe size')->childOf($group)->create();
+    Rule::factory()->validation('false')->create(['view_id' => $field->id, 'meta' => ['message' => 'should not appear']]);
+
+    $summary = View::factory()->html('placeholder')->childOf($group)->create();
+    $summary->update(['config' => [
+        'content' => "Rule says: {{ validationError('{$field->id}') }}",
+    ]]);
+
+    $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
+
+    $evaluation = app(FetchConfigurationState::class)($configuration);
+
+    $resolvedSummary = $evaluation->componentContexts['scope']->first()->children->firstWhere('id', $summary->id);
+
+    expect($resolvedSummary->config['content'])->toBe('Rule says: ');
 });
 
 it('breaks a circular label reference instead of looping forever', function () {
