@@ -13,7 +13,11 @@
             </div>
         @endif
     @elseif ($item->type->value === 'display')
-        <div class="prose prose-sm max-w-none text-gray-700">{!! $item->config['content'] ?? '' !!}</div>
+        @if ($item->config['widget'] ?? null)
+            @include('livewire.play-configurator.widgets.display.'.$item->config['widget'], ['item' => $item])
+        @else
+            <div class="prose prose-sm max-w-none text-gray-700">{!! $item->config['content'] ?? '' !!}</div>
+        @endif
     @else
         @include('livewire.play-configurator.widgets.'.($item->config['widget'] ?? ''), ['item' => $item])
 

@@ -144,6 +144,36 @@ class ViewFactory extends Factory
         ]);
     }
 
+    public function stat(string $label, string $content): static
+    {
+        return $this->state(fn () => [
+            'type' => ViewType::Display,
+            'config' => ['widget' => 'stat', 'label' => $label, 'content' => $content],
+        ]);
+    }
+
+    public function cardToggle(string $title, ?string $icon = null, ?string $subtitle = null): static
+    {
+        return $this->state(fn () => [
+            'type' => ViewType::Input,
+            'config' => array_filter([
+                'widget' => 'card-toggle',
+                'title' => $title,
+                'icon' => $icon,
+                'subtitle' => $subtitle,
+                'default' => false,
+            ], fn ($value) => $value !== null),
+        ]);
+    }
+
+    public function cardRadio(array $options, ?string $label = null): static
+    {
+        return $this->state(fn () => [
+            'type' => ViewType::Input,
+            'config' => ['label' => $label ?? fake()->sentence(), 'widget' => 'card-radio', 'options' => $options],
+        ]);
+    }
+
     public function updateOn(string $updateOn): static
     {
         return $this->state(fn (array $attributes) => [
