@@ -244,37 +244,38 @@ Found via re-profiling on 2026-08-27, after the five items above landed.
       stage (or a "nothing to do here" note) added to this file, not a single blanket rewrite; some stages
       (e.g. anything reading `relevantAnswers`) are inherently per-request and won't have a prebake half.
 
-- [ ] **Rework what goes into the `ExpressionLanguage` evaluation context — always-included vs. cheap-to-include vs. lazy, plus a prebake-backed cache.**
-      Today `CollectAndBatchFetchExternalReferences.php:57-61` builds the *entire* context up front, every
-      request, regardless of which specific expression ends up being evaluated: it regex-scans every scope
-      view's templatable strings and rule expressions plus every calculation formula (`scanReferences`,
-      `referencesThis`) to find every possibly-referenced view id, batch-fetches all of them
-      (`$modelsById`), and stuffs in `calculationFormulas`, `relevantAnswers`, `relevantAnswerChunks`, and
-      `pendingAnswers`. `ApplyCalculation.php:19-24` similarly evaluates *every* formula
-      (`resolve()`/`topologicalOrder()`) every request, not just the ones a given `label()`/rule/validation
-      actually references. Nothing about this is lazy today — the eager batch-fetch already replaced N+1
-      per-reference queries with one upfront pass (see the "Pipeline performance" items above), but it still
-      does that pass unconditionally rather than only for what's actually needed this evaluation.
+- [x] **Rework what goes into the `ExpressionLanguage` evaluation context — always-included vs. cheap-to-include vs. lazy, plus a prebake-backed cache.**
+      Investigated via grilling on 2026-08-28, decided against — closing without code changes. This item was
+      written before `BakeConfiguratorGraphs` existed; two of the things it wanted "prebaked" (the formula
+      dependency graph's cycle-freedom and its topological order) already landed as part of that stage (see the
+      cycle-detection item above), just framed as "cycle detection + evaluation order" rather than "lazy
+      context." Re-examined what's actually left in `CollectAndBatchFetchExternalReferences`/`ApplyCalculation`'s
+      context keys with that already accounted for, and none of the remaining pieces hold up:
 
-      Work needed: go through every context key (`modelsById`, `calculationFormulas`, `calculation`,
-      `relevantAnswers`, `relevantAnswerChunks`, `pendingAnswers`, `this`, `__resolving`, `__persistedOnly`)
-      and classify it — always needed (cheap and used by nearly every expression, e.g. `relevantAnswers`),
-      cheap enough to always include even if unused this evaluation (small, already in memory), or a genuine
-      lazy-load candidate (expensive and only sometimes referenced, e.g. `modelsById` external views,
-      individual formula results) that should resolve on first access from the expression instead of
-      being precomputed for the whole scope. `ResolveModelFunction`'s per-call resolution
-      (`app/Actions/Pipeline/ResolveModelFunction.php`) is already lazy in shape — it resolves one
-      `modelClass:id:function` at a time — so laziness for `modelsById` may be a matter of deferring the
-      batch-fetch until first access rather than restructuring the resolution path.
+      - `calculationFormulas`, `relevantAnswers`, `relevantAnswerChunks`, `pendingAnswers` already cost zero
+        extra queries — each is plucked straight off a relation already eager-loaded before the pipeline even
+        starts (`configurator.calculations`, `relevantAnswers`/`relevantAnswerChunks` via
+        `$configuration->load([...])` at the top of `FetchConfigurationState`/`CommitConfigurationAnswers`).
+        There's no query to defer; it's already just handing off an in-memory collection.
+      - The reference-id regex scan (`scanReferences`/`referencesThis` over `templatableStrings()`) runs over
+        the current **scope** only (the anchor's bloodline), not the whole configurator, over text that's
+        already in memory via `ApplyFlow`'s eager-load — pure CPU over an already-small, already-loaded string
+        set, no DB query to cache away. Unlike the label-cycle graph, which is a global, anchor-independent fact
+        about the whole configurator (hence baking it once per configurator made sense), *which ids get
+        referenced* changes with which step you're on — caching it the same way would mean one cache entry per
+        possible anchor view, not one per configurator. Doesn't fit the pattern `BakeConfiguratorGraphs`
+        established.
+      - `modelsById`'s external-view fetch — the one real DB cost here — is already a single batched
+        `whereIn()` query, not N+1 (that's what the "Pipeline performance" items above already fixed).
+        Deferring it to a genuinely lazy per-id fetch wouldn't reduce query count in the common case, and risks
+        *reintroducing* N+1 if several different external ids end up actually used within one request (each
+        needing its own fetch instead of one batch). The only thing true laziness would save is hydrating a few
+        unused external `View` rows — less data, not fewer queries — and `PipelineQueryCountTest` already proves
+        query count stays flat regardless of tree size or field count today.
 
-      Then: since the referenced-id graph (`scanReferences`/`referencesThis`'s output) and the formula
-      dependency graph (`ApplyCalculation::topologicalOrder`) are both static per-configurator — they only
-      depend on rule/template/formula text, never on answers — both are candidates to compute once during the
-      "prebake" step from the cycle-detection item above and cache the result, instead of re-deriving them via
-      regex/DFS on every request. Cache invalidation needs a lookup generated at prebake time (e.g. a
-      content-hash or version stamp of the configurator's rules/views/formulas) so an edit reliably busts the
-      cache — same shape of problem the parse-cache TTL note in the "Pipeline performance" section above is
-      still open on, worth solving once for both.
+      Revisit only if profiling shows the external-view batch fetch hydrating large unused `config`/`Template`
+      payloads for a configurator with many external references — a real, falsifiable trigger, not a design to
+      build speculatively now.
 
 ## Testing (`tests/`)
 
