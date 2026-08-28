@@ -22,22 +22,24 @@ final class ApplyCalculation
 
         /** @var array<string, string> $formulas */
         $formulas = $evaluation->context['calculationFormulas'];
+        $order = $evaluation->configuration->configurator->calculation_order;
 
-        $evaluation->context['calculation'] = (object) $this->resolve($formulas, $evaluation->context);
+        $evaluation->context['calculation'] = (object) $this->resolve($formulas, $order, $evaluation->context);
 
         return $next($evaluation);
     }
 
     /**
      * @param  array<string, string>  $formulas
+     * @param  list<string>  $order
      * @param  array<string, mixed>  $context
      * @return array<string, mixed>
      */
-    private function resolve(array $formulas, array $context): array
+    private function resolve(array $formulas, array $order, array $context): array
     {
         $results = [];
 
-        foreach ($this->topologicalOrder($formulas) as $name) {
+        foreach ($order as $name) {
             try {
                 $results[$name] = ($this->evaluateExpression)($formulas[$name], [...$context, 'calculation' => (object) $results]);
             } catch (Throwable $e) {
@@ -48,43 +50,5 @@ final class ApplyCalculation
         }
 
         return $results;
-    }
-
-    /**
-     * Orders formulas so a formula referencing `calculation.<name>` is evaluated after `<name>`.
-     * Assumes an acyclic dependency graph — `BakeConfiguratorGraphs` asserts that once per
-     * configurator before this stage ever runs.
-     *
-     * @param  array<string, string>  $formulas
-     * @return list<string>
-     */
-    private function topologicalOrder(array $formulas): array
-    {
-        $dependenciesByName = [];
-
-        foreach ($formulas as $name => $expression) {
-            preg_match_all('/calculation\.([a-zA-Z_][a-zA-Z0-9_]*)/', $expression, $matches);
-            $dependenciesByName[$name] = array_values(array_intersect(array_unique($matches[1]), array_keys($formulas)));
-        }
-
-        $resolved = [];
-
-        $visit = function (string $name) use (&$visit, &$resolved, $dependenciesByName): void {
-            if (in_array($name, $resolved, true)) {
-                return;
-            }
-
-            foreach ($dependenciesByName[$name] as $dependency) {
-                $visit($dependency);
-            }
-
-            $resolved[] = $name;
-        };
-
-        foreach (array_keys($formulas) as $name) {
-            $visit($name);
-        }
-
-        return $resolved;
     }
 }

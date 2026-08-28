@@ -188,9 +188,18 @@ Found via re-profiling on 2026-08-27, after the five items above landed.
       graphs — the `Calculation` dependency graph (same `calculation.<name>` regex `ApplyCalculation` already
       used) and a `View` label-reference graph — asserts both acyclic (`RuntimeException` on a real cycle), then
       persists `graphs_acyclic = true`; once `true` it's a single already-loaded-attribute check, no graph walk.
-      `ApplyCalculation::topologicalOrder` dropped its `visiting`-set/throw branch entirely (still computes
-      evaluation order, just trusts the graph is acyclic instead of re-proving it), and `ResolveModelFunction`'s
-      `__resolving` stack is gone outright.
+      `ResolveModelFunction`'s `__resolving` stack is gone outright.
+
+      Extended same-day: the calculation *topological order* itself — which formula must evaluate before which —
+      is exactly as static per-configurator as the acyclic check, and computing it was already a byproduct of the
+      same cycle-detecting DFS, so `BakeConfiguratorGraphs` now returns and persists it too, as a new
+      `calculation_order` json column on `Configurator`, in the same `update()` call as `graphs_acyclic`.
+      `ApplyCalculation::topologicalOrder` is gone entirely — `ApplyCalculation::resolve()` just iterates
+      `$configurator->calculation_order` instead of re-deriving the order from formula text every request. This
+      relies on `BakeConfiguratorGraphs` always running before `ApplyCalculation` in the same pipeline (true in
+      both `FetchConfigurationState`/`CommitConfigurationAnswers`) and always setting both columns together — a
+      test that manually pre-bakes a configurator (`PipelineQueryCountTest`'s shared-configurator scenario) has to
+      set `calculation_order` alongside `graphs_acyclic` for the same reason.
 
       Narrower graph than originally planned: turns out `label()` is the *only* templating function whose
       resolver recurses (it calls `ResolveTemplate` again on the target's own `label` template) —

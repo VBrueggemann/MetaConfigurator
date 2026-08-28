@@ -79,7 +79,7 @@ it('runs the same number of read-pipeline queries no matter how many steps have 
     $steps = collect(range(0, 19))->map(
         fn (int $i) => View::factory()->group()->childOf($root)->create(['order' => $i])
     );
-    $configurator->update(['scope_depth' => 1, 'graphs_acyclic' => true]);
+    $configurator->update(['scope_depth' => 1, 'graphs_acyclic' => true, 'calculation_order' => []]);
 
     $shortHistory = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     $steps->take(2)->each(fn (View $step) => answer($shortHistory, $step, true));

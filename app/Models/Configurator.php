@@ -18,10 +18,12 @@ class Configurator extends Model
         'slug',
         'scope_depth',
         'graphs_acyclic',
+        'calculation_order',
     ];
 
     protected $casts = [
         'graphs_acyclic' => 'bool',
+        'calculation_order' => 'array',
     ];
 
     protected static function booted(): void

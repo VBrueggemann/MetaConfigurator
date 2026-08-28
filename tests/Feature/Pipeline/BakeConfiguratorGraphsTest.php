@@ -29,6 +29,22 @@ it('bakes graphs_acyclic to true on a configurator with no cycles', function () 
     expect($configurator->refresh()->graphs_acyclic)->toBeTrue();
 });
 
+it('bakes the calculation topological order alongside acyclicity', function () {
+    $configurator = Configurator::factory()->create();
+    View::factory()->group()->create(['configurator_id' => $configurator->id]);
+
+    seedCalculations($configurator, [
+        'total' => 'calculation.subtotal * 1.1',
+        'subtotal' => '10',
+    ]);
+
+    $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
+
+    bakeGraphs($configuration);
+
+    expect($configurator->refresh()->calculation_order)->toBe(['subtotal', 'total']);
+});
+
 it('does not re-bake once graphs_acyclic is already true', function () {
     $configurator = Configurator::factory()->create(['graphs_acyclic' => true]);
     View::factory()->group()->create(['configurator_id' => $configurator->id]);

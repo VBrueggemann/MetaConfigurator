@@ -14,16 +14,19 @@ final class BakeConfiguratorGraphs
         $configurator = $evaluation->configuration->configurator;
 
         if (! $configurator->graphs_acyclic) {
-            $this->assertAcyclic(
+            $calculationOrder = $this->topologicalOrder(
                 $this->calculationDependencies($configurator),
                 fn (string $name): string => "Circular calculation dependency involving '{$name}'.",
             );
-            $this->assertAcyclic(
+            $this->topologicalOrder(
                 $this->labelReferences($configurator),
                 fn (string $viewId): string => "Circular label reference involving view '{$viewId}'.",
             );
 
-            $configurator->update(['graphs_acyclic' => true]);
+            $configurator->update([
+                'graphs_acyclic' => true,
+                'calculation_order' => $calculationOrder,
+            ]);
         }
 
         return $next($evaluation);
@@ -66,8 +69,9 @@ final class BakeConfiguratorGraphs
 
     /**
      * @param  array<string, list<string>>  $dependenciesByName
+     * @return list<string>
      */
-    private function assertAcyclic(array $dependenciesByName, Closure $message): void
+    private function topologicalOrder(array $dependenciesByName, Closure $message): array
     {
         $resolved = [];
         $visiting = [];
@@ -94,5 +98,7 @@ final class BakeConfiguratorGraphs
         foreach (array_keys($dependenciesByName) as $name) {
             $visit($name);
         }
+
+        return $resolved;
     }
 }
