@@ -6,6 +6,9 @@ paths:
 # App
 
 ## Queries hold non-state-changing domain logic, return a builder
+
+`tests/Arch/QueriesTest.php` enforces that every `App\Queries` class is invokable (`__invoke()`). It does not (and, with the installed `pest-plugin-arch` v5.0.0's built-in expectations, can't cleanly) check the other parts of this rule below: that `__invoke()` returns a `Builder`, the verb/noun-first naming, or the "one public method" constraint — see the same caveat on `actions.md`/`app-actions.md`.
+
 Split domain logic by whether it changes state:
 - State-changing logic goes in an invokable Action under `app/Actions/` (see the Actions rule above).
 - Read-only/querying domain logic goes in an invokable Query class under `app/Queries/`, same shape as an Action (one public `__invoke()`, verb/noun-first descriptive name), but it must return an Eloquent `Builder` (or query builder) rather than executing the query or hydrating results itself — let the caller decide whether to `->get()`, paginate, further constrain, etc. This is absolute, with no exception for convenience: if a read needs post-hydration shaping (e.g. "most recent wins" dedup, computing a derived selection), that shaping logic gets its own separate, independently-testable class rather than being folded into the Query.

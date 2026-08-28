@@ -209,21 +209,29 @@ Found via re-profiling on 2026-08-27, after the five items above landed.
 
 ## Testing (`tests/`)
 
-- [ ] **Add a Pest architecture test suite — some prose conventions in `.ai/rules`/Boost guidelines are mechanically enforceable and should stop relying on an agent reading the rule file.**
-      `.ai/rules` currently documents several structural conventions as prose that a Pest `arch()` expectation
-      could check directly instead, e.g. after each edit:
-      - `livewire.md` — "No direct DB queries in Livewire components": `arch()->expect('App\Livewire')->not->toUse(['Illuminate\Database\Eloquent\Builder', 'Illuminate\Support\Facades\DB'])` (or similar) catches a component reaching for a query directly instead of going through an Action/Query/pipeline `componentContexts`.
-      - `app-actions.md` — "DTOs live in `app/Actions/DTO/`": every class directly under `App\Actions` (excluding `App\Actions\DTO` and `App\Actions\Pipeline`) should have an `__invoke()` method; every class under `App\Actions\DTO` should not.
-      - `actions.md` — single-purpose Actions have exactly one public method, `__invoke()`, verb-first name — arch can check "has `__invoke`"; check what Pest 5's arch API can express for "only one public method" and naming pattern, since that part may need a custom expectation instead of a built-in one.
-      - `models.md` — "Domain models use `HasUuids`": `arch()->expect('App\Models')->toUse(Illuminate\Database\Eloquent\Concerns\HasUuids::class)`, scoped to exclude any framework model that keeps auto-increment ids (none currently, but don't assume that stays true).
-      - `rules-engine.md` — "an Action never belongs in `Pipeline/` unless something else's pipeline invokes it" and the two pipelines' stage lists themselves are candidates for a narrower check (e.g. every class in `App\Actions\Pipeline` is only referenced from `FetchConfigurationState`/`CommitConfigurationAnswers`'s `->through([...])` arrays) — likely needs a custom arch expectation or a plain reflection-based test, not a stock `toUse`/`toOnlyBeUsedIn` one; check what's available before assuming it's expressible.
-      - `app.md` — "prefer global helpers over facades/`new`'d classes" is a weaker candidate: broadly true but has legitimate exceptions (see the rule's own carve-out), so a blanket `not->toUse` would false-positive; skip unless a narrower, exception-free version of the rule can be stated.
+- [x] **Add a Pest architecture test suite — some prose conventions in `.ai/rules`/Boost guidelines are mechanically enforceable and should stop relying on an agent reading the rule file.**
+      Done for the three rules that turned out cleanly expressible against the installed `pestphp/pest` v5.1.1 /
+      `pest-plugin-arch` v5.0.0, each verified to actually fail on a real violation (not just pass vacuously)
+      before being kept:
+      - `tests/Arch/LivewireTest.php` — livewire.md's no-direct-DB-queries rule.
+      - `tests/Arch/ActionsTest.php` — app-actions.md's DTO/`__invoke()` split.
+      - `tests/Arch/ModelsTest.php` — models.md's `HasUuids` rule. Note the trap here: the obvious
+        `expect('App\Models')->toUse(HasUuids::class)` is a namespace-*aggregate* check (passes the moment
+        *any* model in the namespace uses the trait) — silently stops enforcing anything once one real model
+        has it. `->toUseTrait(...)` is the actual per-class check; see the rule file for the full explanation.
+      Each corresponding `.ai/rules` file now points at its enforcing test instead of restating the constraint.
 
-      Where an arch test can express a rule exactly, add the test and shrink the corresponding `.ai/rules` prose
-      to point at it ("enforced by `tests/Arch/...`") instead of restating the constraint, so the two can't
-      silently drift — the test is the enforcement, the rule file stays for the *why* an agent still needs to
-      know. Where a rule turns out not to be cleanly expressible (mixed-in exceptions, needs call-site/usage
-      analysis rather than class metadata), leave it as prose and note in this TODO why it didn't fit rather
-      than forcing a brittle approximation. Check `pestphp/pest-plugin-arch`'s actual capabilities in this
-      project's installed Pest version (`composer show pestphp/pest` — CLAUDE.md's Foundational Context: don't
-      assume API surface from a different major version) before committing to specific expectations above.
+      Left as prose, not mechanically enforced:
+      - `actions.md`'s "exactly one public method" and verb-first naming — `toHavePublicMethods()`/
+        `toHavePublicMethodsBesides()` are unimplemented stubs in this Pest version (throw
+        `InvalidExpectation`), and there's no naming-semantics matcher for "verb-first". Re-check if the
+        installed version changes.
+      - `rules-engine.md`'s "an Action never belongs in `Pipeline/` unless something else's pipeline invokes
+        it" — every `tests/Feature/Pipeline/*Test.php` also constructs a stage directly
+        (`app(ApplyFlow::class)(...)`), and stages inject each other directly too (`ApplyValidation` takes
+        `EvaluateRule` in its constructor), so a `toOnlyBeUsedIn`/`toBeUsedIn` check would either false-positive
+        on that legitimate usage or require distinguishing a `->through()` array literal from constructor
+        injection, which isn't expressible with this plugin version's usage-based expectations.
+      - `app.md`'s "prefer global helpers over facades/`new`'d classes" — has legitimate exceptions per the
+        rule's own carve-out, so a blanket `not->toUse` would false-positive; skip unless a narrower,
+        exception-free version of the rule can be stated.

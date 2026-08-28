@@ -8,6 +8,8 @@ paths:
 ## Domain models use UUID primary keys
 Domain models use `HasUuids` for UUID primary keys, not auto-incrementing integers. Framework tables (e.g. `users`) keep the default auto-increment id — this applies to app-owned domain models.
 
+Enforced by `tests/Arch/ModelsTest.php` via `->toUseTrait(...)`, not `->toUse(...)`: `expect('App\Models')->toUse(HasUuids::class)` looks like the obvious expectation but is a namespace-aggregate check — it passes as soon as *any* model in the namespace uses the trait, so it silently stops enforcing anything the moment one real model has it (verified empirically: stripping `HasUuids` from one model while others kept it still passed). `toUseTrait()` is the actual per-class (for-all) check for trait usage; `->ignoring('App\Models\User')` carves out the one framework model.
+
 ## Mass assignment via $fillable property
 Declare mass-assignable fields with `protected $fillable = [...]` as a class property, not the `#[Fillable]`/`#[Hidden]` attribute style.
 
