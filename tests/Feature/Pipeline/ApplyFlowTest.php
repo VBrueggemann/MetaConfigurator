@@ -4,7 +4,6 @@ use App\Actions\DTO\ConfigurationEvaluation;
 use App\Actions\DTO\PendingAnswer;
 use App\Actions\Pipeline\ApplyFlow;
 use App\Models\Answer;
-use App\Models\Component;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\Rule;
@@ -27,7 +26,7 @@ it('anchors at the lowest-order view at the configured depth when nothing is ans
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
-    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -44,7 +43,7 @@ it('advances via an explicit Flow rule referencing a persisted answer', function
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
     $groupThree = View::factory()->group()->childOf($root)->create(['order' => 2]);
     Rule::factory()->flow("answer('{$color->id}') == 'red'", $groupThree->id)->create(['view_id' => $groupOne->id]);
-    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     answer($configuration, $groupOne, true);
@@ -64,7 +63,7 @@ it('advances via a Flow rule referencing the aggregated answer() of a nested gro
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
     $groupThree = View::factory()->group()->childOf($root)->create(['order' => 2]);
     Rule::factory()->flow("answer('{$nestedGroup->id}') == 'red'", $groupThree->id)->create(['view_id' => $groupOne->id]);
-    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     answer($configuration, $groupOne, true);
@@ -83,7 +82,7 @@ it('bounds the flow-rule scan to the last-answered view, never reconsidering an 
     $groupThree = View::factory()->group()->childOf($root)->create(['order' => 2]);
     $groupFour = View::factory()->group()->childOf($root)->create(['order' => 3]);
     Rule::factory()->flow('true', $groupFour->id)->create(['view_id' => $groupOne->id]);
-    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     answer($configuration, $groupTwo, true);
@@ -99,7 +98,7 @@ it('ignores a pending answer when evaluating Flow rules, using only persisted st
     $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
     Rule::factory()->flow("answer('{$groupOne->id}') == true", $groupTwo->id)->create(['view_id' => $groupOne->id]);
-    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     $evaluation = new ConfigurationEvaluation($configuration, [new PendingAnswer($groupOne->id, true)]);

@@ -2,7 +2,6 @@
 
 use App\Livewire\PlayConfigurator;
 use App\Models\Answer;
-use App\Models\Component;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\View;
@@ -164,7 +163,7 @@ it('prefills a superseded step field with its stale answer instead of the static
     $fieldOne = View::factory()->textInput('Field one')->childOf($stepOne)->create(['order' => 0]);
     $stepTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
     $fieldTwo = View::factory()->textInput('Field two')->childOf($stepTwo)->create(['order' => 0]);
-    Component::factory()->scope(depth: 1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $component = Livewire::test(PlayConfigurator::class, ['configurator' => $configurator])
         ->set("values.{$fieldOne->id}", 'first answer')
@@ -184,7 +183,7 @@ it('renders a clickable breadcrumb for each already-answered step', function () 
     $stepOne = View::factory()->group('Step One')->childOf($root)->create(['order' => 0]);
     $fieldOne = View::factory()->textInput('Field one')->childOf($stepOne)->create(['order' => 0]);
     View::factory()->group('Step Two')->childOf($root)->create(['order' => 1]);
-    Component::factory()->scope(depth: 1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $component = Livewire::test(PlayConfigurator::class, ['configurator' => $configurator])
         ->set("values.{$fieldOne->id}", 'answer')

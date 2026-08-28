@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Component;
 use App\Models\Configurator;
 use App\Models\Rule;
 use App\Models\View;
@@ -129,12 +128,12 @@ class WienerbergerWevoltSeeder extends Seeder
             'Geschätzte jährliche Ersparnis: {{ calculation.estimatedAnnualSavingsEur }} €',
         ])]]);
 
-        Component::factory()->calculation([
-            'systemSizeKwp' => "(answer('{$roofAreaField->id}') ?? 0) * 0.18",
-            'annualProductionKwh' => 'calculation.systemSizeKwp * 950',
-            'annualConsumptionKwh' => "(answer('{$consumptionChoiceField->id}') == 'custom' ? answer('{$consumptionExactField->id}') : answer('{$consumptionChoiceField->id}')) ?? 0",
-            'estimatedAnnualSavingsEur' => "(calculation.annualProductionKwh < calculation.annualConsumptionKwh ? calculation.annualProductionKwh : calculation.annualConsumptionKwh) * (answer('{$tariffField->id}') ?? 0)",
-        ])->create(['configurator_id' => $configurator->id]);
+        $configurator->calculations()->createMany([
+            ['name' => 'systemSizeKwp', 'expression' => "(answer('{$roofAreaField->id}') ?? 0) * 0.18"],
+            ['name' => 'annualProductionKwh', 'expression' => 'calculation.systemSizeKwp * 950'],
+            ['name' => 'annualConsumptionKwh', 'expression' => "(answer('{$consumptionChoiceField->id}') == 'custom' ? answer('{$consumptionExactField->id}') : answer('{$consumptionChoiceField->id}')) ?? 0"],
+            ['name' => 'estimatedAnnualSavingsEur', 'expression' => "(calculation.annualProductionKwh < calculation.annualConsumptionKwh ? calculation.annualProductionKwh : calculation.annualConsumptionKwh) * (answer('{$tariffField->id}') ?? 0)"],
+        ]);
 
         Rule::factory()->validation('answer(this) != null && answer(this) > 0')
             ->create(['view_id' => $roofAreaField->id, 'meta' => ['message' => 'Bitte geben Sie die Dachfläche in Quadratmetern an.']]);
@@ -215,8 +214,7 @@ class WienerbergerWevoltSeeder extends Seeder
 
         Rule::factory()->flow("answer('{$page->id}') == true", $success->id)->create(['view_id' => $success->id]);
 
-        Component::factory()->scope(depth: 1)
-            ->create(['configurator_id' => $configurator->id]);
+        $configurator->update(['scope_depth' => 1]);
 
         $this->command?->info('   Configurator: '.route('configurators.play', ['configurator' => $configurator]));
     }

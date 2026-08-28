@@ -115,34 +115,29 @@ Found via re-profiling on 2026-08-27, after the five items above landed.
 
 ## Data model (`app/Models/Component.php`)
 
-- [ ] **Fold `Component` into `Configurator` — it's a generic `type => config` table that only ever holds two rows.**
-      `components` has a `unique(['configurator_id', 'type'])` constraint and `ComponentType` has seven cases,
-      but in practice only `ComponentType::Scope` (`config: {depth}`) and `ComponentType::Calculation`
-      (`config: {formulas}`) rows are ever created — `ComponentFactory` only defines `scope()`/`calculation()`
-      states, and every seeder (`RockBandGearConfiguratorSeeder`, `WidgetShowcaseSeeder`,
-      `FictionalSurveySeeder`, `TemplatingShowcaseSeeder`, `WienerbergerWevoltSeeder`) and every test that
-      creates a `Component` uses one of those two. The remaining cases (`Visibility`, `Validation`,
-      `AnsweredViews`, `Breadcrumbs`, `PendingViews`) are never persisted — they're only used as string keys
-      into the in-memory `ConfigurationEvaluation::$componentContexts` array set by pipeline stages
-      (`ApplyFlow.php:66,71`, `ApplyBreadcrumbs.php:18`), unrelated to the DB table.
-
-      Every DB read of `Component` today (`ApplyFlow.php:27`, `ApplyCalculation.php:21`,
-      `CollectAndBatchFetchExternalReferences.php:26`) is already scoped to one configurator and one known
-      type, so replacing the table with `scope_depth` (int) and `calculation_formulas` (json) columns directly
-      on `configurators` collapses each of those into a plain attribute read — no query at all, since
-      `configurator` is already eager-loaded onto `$evaluation->configuration` before the pipeline runs
-      (`FetchConfigurationState.php:28`, `CommitConfigurationAnswers.php:31` both `loadMissing('configurator.rootView')`).
-      Removes `app/Models/Component.php`, `database/factories/ComponentFactory.php`, the DB-backed half of
-      `ComponentType`, and the `components` table (new drop migration, don't edit the create migration).
-      Touches every seeder and test listed above.
-
-      Open question for `calculation_formulas`: unlike `scope_depth` (a single scalar), a configurator's
-      formulas are a *named list* (`{name: expression}`), which is a less natural fit for one JSON column than
-      `scope_depth` is. Worth considering a dedicated `calculations` table (one row per formula: `configurator_id`,
-      `name`, `expression`) instead of a JSON blob column — trades one extra join/eager-load for per-formula
-      rows that are individually indexable, queryable, and diffable, at the cost of reintroducing a second
-      table (i.e. partially undoing the "fold into `Configurator`" simplification this item is chasing). Decide
-      json-column vs. own-table before implementing either half of this item.
+- [x] **Fold `Component` into `Configurator` — it's a generic `type => config` table that only ever holds two rows.**
+      Fixed 2026-08-28: `app/Models/Component.php`, `app/Enums/ComponentType.php`, `database/factories/ComponentFactory.php`,
+      and the `components` table (dropped via a new migration, per this repo's create-migrations-are-immutable
+      convention) are gone. `scope_depth` (unsigned int, default `0`) is now a plain column on `configurators`
+      — confirmed via `ComponentFactory::scope()`'s unused `$extra` param that no seeder ever needed more than
+      the depth scalar. Calculation formulas became their own `Calculation` model/table (`configurator_id`,
+      `name`, `text` `expression`, `unique(configurator_id, name)`) rather than a JSON blob column on
+      `Configurator` — a deliberate choice to keep formulas individually diffable/queryable, even though it
+      re-adds a second table, because a per-formula-list JSON column was judged the wrong trade-off here.
+      `expression` had to be `text`, not `string(255)` — one real seeded formula
+      (`RockBandGearConfiguratorSeeder`'s `guitarBrandPrice`, a nested ternary) is over 255 characters and
+      failed to insert under the initial `string` choice. `ApplyFlow`, `ApplyCalculation`, and
+      `CollectAndBatchFetchExternalReferences` now read `$configurator->scope_depth` /
+      `$configurator->calculations` directly (both eager-loaded via `loadMissing(['configurator.rootView',
+      'configurator.calculations'])` in `FetchConfigurationState`/`CommitConfigurationAnswers`) instead of
+      querying `components`. The remaining `ComponentType` cases (`Visibility`, `Validation`, `AnsweredViews`,
+      `Breadcrumbs`, `PendingViews`) were never DB-persisted (confirmed by audit — `Visibility` was only ever
+      the factory's unused default state, `Validation`/`AnsweredViews` had zero references anywhere) and are
+      now plain string literals (`'scope'`, `'pending_views'`, `'breadcrumbs'`) wherever they were previously
+      used as `componentContexts` array keys, since there's no shared enum left to hang them on and no roadmap
+      for a generic pipeline-stage-to-DB-entity coupling. All five seeders and every affected test updated;
+      added a `seedCalculations()` test helper in `tests/Pest.php` for the seed-then-assert pattern
+      `ApplyCalculationTest`/`ResolveTemplateStringsTest` both need.
 
 ## Expression evaluation (`app/Actions/Pipeline/ApplyCalculation.php`, `app/Actions/Pipeline/ResolveModelFunction.php`)
 

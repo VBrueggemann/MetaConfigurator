@@ -1,7 +1,6 @@
 <?php
 
 use App\Actions\Pipeline\ResolveTemplate;
-use App\Enums\ComponentType;
 use App\Enums\RuleComponent;
 use App\Enums\ViewType;
 use App\Models\Rule;
@@ -50,7 +49,7 @@ return [
 
     'resolvable' => [
         [
-            'context' => ComponentType::Scope->value,
+            'context' => 'scope',
             'iterate' => function (Collection $views, Closure $visit): void {
                 $walk = function (View $view) use (&$walk, $visit): void {
                     $view->rules->each($visit);
@@ -76,7 +75,7 @@ return [
         ],
 
         [
-            'context' => ComponentType::Scope->value,
+            'context' => 'scope',
             'iterate' => function (Collection $views, Closure $visit): void {
                 $walk = function (View $view) use (&$walk, $visit): void {
                     $visit($view);

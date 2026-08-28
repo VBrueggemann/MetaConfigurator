@@ -3,7 +3,6 @@
 use App\Actions\CommitConfigurationAnswers;
 use App\Actions\DTO\PendingAnswer;
 use App\Actions\FetchConfigurationState;
-use App\Models\Component;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\Rule;
@@ -36,7 +35,7 @@ function buildStepConfigurator(int $fieldCount = 3, int $extraStepCount = 0): ob
         View::factory()->group()->childOf($root)->create(['order' => 2 + $i]);
     }
 
-    Component::factory()->scope(depth: 1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -80,7 +79,7 @@ it('runs the same number of read-pipeline queries no matter how many steps have 
     $steps = collect(range(0, 19))->map(
         fn (int $i) => View::factory()->group()->childOf($root)->create(['order' => $i])
     );
-    Component::factory()->scope(depth: 1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $shortHistory = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     $steps->take(2)->each(fn (View $step) => answer($shortHistory, $step, true));

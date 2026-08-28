@@ -3,10 +3,8 @@
 namespace App\Actions\Pipeline;
 
 use App\Actions\DTO\ConfigurationEvaluation;
-use App\Enums\ComponentType;
 use App\Enums\RuleComponent;
 use App\Enums\ViewType;
-use App\Models\Component;
 use App\Models\Rule;
 use App\Models\View;
 use Closure;
@@ -24,12 +22,7 @@ final class ApplyFlow
 
     public function __invoke(ConfigurationEvaluation $evaluation, Closure $next): mixed
     {
-        $component = Component::query()
-            ->where('configurator_id', $evaluation->configuration->configurator_id)
-            ->where('type', ComponentType::Scope)
-            ->first();
-
-        $depth = $component?->config['depth'] ?? 0;
+        $depth = $evaluation->configuration->configurator->scope_depth;
         $answeredViewIds = $evaluation->configuration->relevantAnswers->pluck('view_id')
             ->merge($evaluation->configuration->relevantAnswerChunks->pluck('anchor_view_id'));
         $rootView = $evaluation->configuration->configurator->rootView;
@@ -63,12 +56,12 @@ final class ApplyFlow
         $nextView->loadMissing(['bloodline' => fn ($q) => $q->depthFirst(), 'bloodline.rules']);
 
         $evaluation->anchorViewId = $nextView->id;
-        $evaluation->componentContexts[ComponentType::Scope->value] = $nextView->bloodline->toTree();
+        $evaluation->componentContexts['scope'] = $nextView->bloodline->toTree();
 
         $pendingViewPaths = collect($evaluation->pendingAnswers)->pluck('viewId');
         $pendingViewPaths = $nextView->bloodline->whereIn('id', $pendingViewPaths)->map->path->values()->all();
 
-        $evaluation->componentContexts[ComponentType::PendingViews->value] = $nextView->bloodline
+        $evaluation->componentContexts['pending_views'] = $nextView->bloodline
             ->filter(fn (View $view) => str(implode('|', $pendingViewPaths))->contains($view->id));
 
         return $next($evaluation);

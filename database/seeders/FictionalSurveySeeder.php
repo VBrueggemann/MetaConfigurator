@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Component;
 use App\Models\Configurator;
 use App\Models\Rule;
 use App\Models\View;
@@ -46,8 +45,7 @@ class FictionalSurveySeeder extends Seeder
         Rule::factory()->flow("answer('{$aboutYou->id}') != null && answer('{$allergy->id}') != null", $allergyEnd->id)
             ->create(['view_id' => $allergyEnd->id]);
 
-        Component::factory()->scope(depth: 1)
-            ->create(['configurator_id' => $configurator->id]);
+        $configurator->update(['scope_depth' => 1]);
 
         $this->command?->info('   Configrator: '.route('configurators.play', ['configurator' => $configurator]));
     }

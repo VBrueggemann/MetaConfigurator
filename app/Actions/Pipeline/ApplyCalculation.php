@@ -3,8 +3,6 @@
 namespace App\Actions\Pipeline;
 
 use App\Actions\DTO\ConfigurationEvaluation;
-use App\Enums\ComponentType;
-use App\Models\Component;
 use Closure;
 use RuntimeException;
 use Throwable;
@@ -18,10 +16,9 @@ final class ApplyCalculation
     public function __invoke(ConfigurationEvaluation $evaluation, Closure $next): mixed
     {
         if (! array_key_exists('calculationFormulas', $evaluation->context)) {
-            $evaluation->context['calculationFormulas'] = Component::query()
-                ->where('configurator_id', $evaluation->configuration->configurator_id)
-                ->where('type', ComponentType::Calculation)
-                ->first()?->config['formulas'] ?? [];
+            $evaluation->context['calculationFormulas'] = $evaluation->configuration->configurator->calculations
+                ->pluck('expression', 'name')
+                ->all();
         }
 
         /** @var array<string, string> $formulas */

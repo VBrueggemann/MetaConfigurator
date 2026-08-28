@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Component;
 use App\Models\Configurator;
 use App\Models\Rule;
 use App\Models\View;
@@ -90,8 +89,7 @@ class WidgetShowcaseSeeder extends Seeder
         Rule::factory()->flow("answer('{$step2->id}') == true", $step3->id)->create(['view_id' => $step3->id]);
         Rule::factory()->flow("answer('{$step3->id}') == true", $step4->id)->create(['view_id' => $step4->id]);
 
-        Component::factory()->scope(depth: $this->depth)
-            ->create(['configurator_id' => $configurator->id]);
+        $configurator->update(['scope_depth' => $this->depth]);
 
         $this->command?->info('   Configrator: '.route('configurators.play', ['configurator' => $configurator]));
     }

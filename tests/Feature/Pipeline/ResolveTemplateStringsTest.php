@@ -4,7 +4,6 @@ use App\Actions\CommitConfigurationAnswers;
 use App\Actions\DTO\PendingAnswer;
 use App\Actions\FetchConfigurationState;
 use App\Actions\Pipeline\ResolveTemplate;
-use App\Models\Component;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\Rule;
@@ -32,7 +31,7 @@ it('substitutes a calculation result into display content', function () {
     $total = View::factory()->html('placeholder')->childOf($group)->create();
     $total->update(['config' => ['content' => 'Sum: {{ calculation.total }}']]);
 
-    Component::factory()->calculation(['total' => '10 + 5'])->create(['configurator_id' => $configurator->id]);
+    seedCalculations($configurator, ['total' => '10 + 5']);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 

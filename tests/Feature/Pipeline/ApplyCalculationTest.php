@@ -2,7 +2,6 @@
 
 use App\Actions\DTO\PendingAnswer;
 use App\Actions\FetchConfigurationState;
-use App\Models\Component;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\Rule;
@@ -14,9 +13,9 @@ it('exposes named formula results to expressions via dot access', function () {
     $qty = View::factory()->textInput()->childOf($group)->create();
     $price = View::factory()->textInput()->childOf($group)->create();
 
-    Component::factory()->calculation([
+    seedCalculations($configurator, [
         'subtotal' => "answer('{$qty->id}') * answer('{$price->id}')",
-    ])->create(['configurator_id' => $configurator->id]);
+    ]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -29,10 +28,10 @@ it('resolves formulas that reference each other regardless of declaration order'
     $configurator = Configurator::factory()->create();
     View::factory()->group()->create(['configurator_id' => $configurator->id]);
 
-    Component::factory()->calculation([
+    seedCalculations($configurator, [
         'total' => 'calculation.subtotal * 1.1',
         'subtotal' => '10',
-    ])->create(['configurator_id' => $configurator->id]);
+    ]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -47,9 +46,9 @@ it('lets a visibility rule reference a calculation result', function () {
     $qty = View::factory()->textInput()->childOf($group)->create();
     $discountNotice = View::factory()->html('bulk discount applied')->childOf($group)->create();
 
-    Component::factory()->calculation([
+    seedCalculations($configurator, [
         'qty' => "answer('{$qty->id}')",
-    ])->create(['configurator_id' => $configurator->id]);
+    ]);
 
     Rule::factory()->visibility('calculation.qty > 10')->create(['view_id' => $discountNotice->id]);
 
@@ -66,10 +65,10 @@ it('throws a clear error on a circular formula dependency', function () {
     $configurator = Configurator::factory()->create();
     View::factory()->group()->create(['configurator_id' => $configurator->id]);
 
-    Component::factory()->calculation([
+    seedCalculations($configurator, [
         'a' => 'calculation.b + 1',
         'b' => 'calculation.a + 1',
-    ])->create(['configurator_id' => $configurator->id]);
+    ]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -82,9 +81,9 @@ it('falls back to 0 instead of crashing when a formula fails to evaluate', funct
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $quantity = View::factory()->number()->childOf($group)->create();
 
-    Component::factory()->calculation([
+    seedCalculations($configurator, [
         'subtotal' => "answer('{$quantity->id}') * 2",
-    ])->create(['configurator_id' => $configurator->id]);
+    ]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -98,10 +97,10 @@ it('lets a downstream formula see 0 when the formula it references failed to eva
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $quantity = View::factory()->number()->childOf($group)->create();
 
-    Component::factory()->calculation([
+    seedCalculations($configurator, [
         'subtotal' => "answer('{$quantity->id}') * 2",
         'total' => 'calculation.subtotal + 5',
-    ])->create(['configurator_id' => $configurator->id]);
+    ]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 

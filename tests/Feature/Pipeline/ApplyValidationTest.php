@@ -5,7 +5,6 @@ use App\Actions\DTO\PendingAnswer;
 use App\Actions\Pipeline\ApplyFlow;
 use App\Actions\Pipeline\ApplyValidation;
 use App\Actions\Pipeline\CollectAndBatchFetchExternalReferences;
-use App\Models\Component;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\Rule;
@@ -37,7 +36,7 @@ it('prunes a passing validation rule off a pending view', function () {
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $field = View::factory()->textInput()->childOf($root)->create(['order' => 0]);
     Rule::factory()->validation('true')->create(['view_id' => $field->id]);
-    Component::factory()->scope(0)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 0]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -51,7 +50,7 @@ it('keeps a failing validation rule on a pending view', function () {
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $field = View::factory()->textInput()->childOf($root)->create(['order' => 0]);
     Rule::factory()->validation('false')->create(['view_id' => $field->id, 'meta' => ['message' => 'invalid']]);
-    Component::factory()->scope(0)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 0]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -65,7 +64,7 @@ it('removes even a failing validation rule from a view that was not pending', fu
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $field = View::factory()->textInput()->childOf($root)->create(['order' => 0]);
     Rule::factory()->validation('false')->create(['view_id' => $field->id]);
-    Component::factory()->scope(0)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 0]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -80,7 +79,7 @@ it('treats a group as pending when a descendant leaf is pending', function () {
     $group = View::factory()->group()->childOf($root)->create(['order' => 0]);
     $field = View::factory()->textInput()->childOf($group)->create(['order' => 0]);
     Rule::factory()->validation('false')->create(['view_id' => $group->id, 'meta' => ['message' => 'group invalid']]);
-    Component::factory()->scope(0)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 0]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 

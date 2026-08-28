@@ -3,7 +3,6 @@
 namespace App\Actions\Pipeline;
 
 use App\Actions\DTO\ConfigurationEvaluation;
-use App\Enums\ComponentType;
 use App\Enums\RuleComponent;
 use App\Models\Rule;
 use App\Models\View;
@@ -20,7 +19,7 @@ final class ApplyVisibility
     {
         $visibility = [];
 
-        $scope = $evaluation->componentContexts[ComponentType::Scope->value] ?? collect();
+        $scope = $evaluation->componentContexts['scope'] ?? collect();
 
         foreach ($scope->toList() as $view) {
             $rules = $view->rules->filter(fn ($rule) => $rule->component === RuleComponent::Visibility);

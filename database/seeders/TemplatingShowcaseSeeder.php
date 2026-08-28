@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Component;
 use App\Models\Configurator;
 use App\Models\Rule;
 use App\Models\View;
@@ -23,12 +22,12 @@ class TemplatingShowcaseSeeder extends Seeder
         $firstName = View::factory()->textInput('First name')->childOf($root)->create(['order' => 0]);
         $lastName = View::factory()->textInput('Last name')->childOf($root)->create(['order' => 1]);
 
-        Component::factory()->calculation([
-            'firstNameLength' => "strlen(answer('{$firstName->id}'))",
-            'firstNameRemaining' => "{$maxLength} - calculation.firstNameLength",
-            'lastNameLength' => "strlen(answer('{$lastName->id}'))",
-            'lastNameRemaining' => "{$maxLength} - calculation.lastNameLength",
-        ])->create(['configurator_id' => $configurator->id]);
+        $configurator->calculations()->createMany([
+            ['name' => 'firstNameLength', 'expression' => "strlen(answer('{$firstName->id}'))"],
+            ['name' => 'firstNameRemaining', 'expression' => "{$maxLength} - calculation.firstNameLength"],
+            ['name' => 'lastNameLength', 'expression' => "strlen(answer('{$lastName->id}'))"],
+            ['name' => 'lastNameRemaining', 'expression' => "{$maxLength} - calculation.lastNameLength"],
+        ]);
 
         Rule::factory()->validation("calculation.firstNameLength <= {$maxLength}")->create([
             'view_id' => $firstName->id,

@@ -28,7 +28,7 @@ final class CommitConfigurationAnswers
         $evaluation = new ConfigurationEvaluation($configuration, $pendingAnswers, anchorViewId: $anchorViewId);
 
         $configuration->load(['relevantAnswers', 'relevantAnswerChunks']);
-        $configuration->loadMissing('configurator.rootView');
+        $configuration->loadMissing(['configurator.rootView', 'configurator.calculations']);
 
         if (! $configuration->configurator->rootView) {
             abort(404);

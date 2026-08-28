@@ -5,7 +5,6 @@ use App\Actions\DTO\PendingAnswer;
 use App\Actions\Pipeline\ApplyFlow;
 use App\Actions\Pipeline\CollectAndBatchFetchExternalReferences;
 use App\Models\Answer;
-use App\Models\Component;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\Rule;
@@ -37,7 +36,7 @@ it('puts every in-scope view into modelsById', function () {
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $name = View::factory()->textInput('Full name')->childOf($root)->create(['order' => 0]);
     Rule::factory()->visibility('true')->create(['view_id' => $name->id]);
-    Component::factory()->scope(0)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 0]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -51,7 +50,7 @@ it('does not batch-fetch views when nothing external is referenced and no descen
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $name = View::factory()->textInput()->childOf($root)->create(['order' => 0]);
     Rule::factory()->visibility('true')->create(['view_id' => $name->id]);
-    Component::factory()->scope(0)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 0]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     $evaluation = new ConfigurationEvaluation($configuration, []);
@@ -75,7 +74,7 @@ it('batch-fetches a view referenced by answer() outside the current scope', func
     $stepTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
     $target = View::factory()->textInput()->childOf($stepTwo)->create(['order' => 0]);
     Rule::factory()->visibility("answer('{$outside->id}') == 'x'")->create(['view_id' => $target->id]);
-    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     answer($configuration, $stepOne, true);
@@ -97,7 +96,7 @@ it('batch-fetches a view referenced by label() outside the current scope', funct
         'order' => 0,
         'config' => ['label' => "{{ label('{$outside->id}') }}", 'widget' => 'text'],
     ]);
-    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     answer($configuration, $stepOne, true);
@@ -112,7 +111,7 @@ it('loads descendants for an in-scope group referenced by answer() without an ex
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $child = View::factory()->textInput()->childOf($root)->create(['order' => 0]);
     Rule::factory()->visibility("answer('{$root->id}') == 'true, x'")->create(['view_id' => $child->id]);
-    Component::factory()->scope(0)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 0]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -125,7 +124,7 @@ it('loads descendants for a group whose own rule references answer(this)', funct
     $configurator = Configurator::factory()->create();
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     Rule::factory()->visibility('answer(this) == true')->create(['view_id' => $root->id]);
-    Component::factory()->scope(0)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 0]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -140,7 +139,7 @@ it('does not load descendants for a non-group view referenced by answer()', func
     $source = View::factory()->textInput()->childOf($root)->create(['order' => 0]);
     $target = View::factory()->textInput()->childOf($root)->create(['order' => 1]);
     Rule::factory()->visibility("answer('{$source->id}') == 'x'")->create(['view_id' => $target->id]);
-    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 

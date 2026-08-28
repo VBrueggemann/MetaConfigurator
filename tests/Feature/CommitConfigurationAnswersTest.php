@@ -4,7 +4,6 @@ use App\Actions\CommitConfigurationAnswers;
 use App\Actions\DTO\PendingAnswer;
 use App\Models\Answer;
 use App\Models\AnswerChunk;
-use App\Models\Component;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\Rule;
@@ -33,7 +32,7 @@ it('appends a second chunk with the next sequence for a later commit', function 
     $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
     $name = View::factory()->textInput()->childOf($groupTwo)->create();
-    Component::factory()->scope(depth: 1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -51,7 +50,7 @@ it('supersedes the current chunk and everything after it when revisiting an alre
     $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
     $groupThree = View::factory()->group()->childOf($root)->create(['order' => 2]);
-    Component::factory()->scope(depth: 1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -75,7 +74,7 @@ it('ignores a requested anchor that is neither the computed next step nor an exi
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
-    Component::factory()->scope(depth: 1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 

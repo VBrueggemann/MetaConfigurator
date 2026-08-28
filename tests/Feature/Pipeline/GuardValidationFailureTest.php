@@ -7,7 +7,6 @@ use App\Actions\Pipeline\ApplyValidation;
 use App\Actions\Pipeline\CollectAndBatchFetchExternalReferences;
 use App\Actions\Pipeline\GuardValidationFailure;
 use App\Exceptions\ValidationFailedException;
-use App\Models\Component;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\Rule;
@@ -40,7 +39,7 @@ it('throws ValidationFailedException when a failing rule remains', function () {
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $field = View::factory()->textInput()->childOf($root)->create(['order' => 0]);
     Rule::factory()->validation('false')->create(['view_id' => $field->id]);
-    Component::factory()->scope(0)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 0]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -52,7 +51,7 @@ it('does not throw when nothing fails', function () {
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $field = View::factory()->textInput()->childOf($root)->create(['order' => 0]);
     Rule::factory()->validation('true')->create(['view_id' => $field->id]);
-    Component::factory()->scope(0)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 0]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 

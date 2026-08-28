@@ -3,9 +3,7 @@
 namespace App\Actions\Pipeline;
 
 use App\Actions\DTO\ConfigurationEvaluation;
-use App\Enums\ComponentType;
 use App\Enums\ViewType;
-use App\Models\Component;
 use App\Models\Rule;
 use App\Models\View;
 use Closure;
@@ -17,16 +15,15 @@ final class CollectAndBatchFetchExternalReferences
 
     public function __invoke(ConfigurationEvaluation $evaluation, Closure $next): mixed
     {
-        $scopeViewsById = collect($evaluation->componentContexts[ComponentType::Scope->value] ?? [])->toList()->keyBy('id');
+        $scopeViewsById = collect($evaluation->componentContexts['scope'] ?? [])->toList()->keyBy('id');
 
         $functions = config('templating.functions.'.View::class, []);
         $with = collect($functions)->flatMap(fn (array $definition): array => $definition['with'])->unique()->values()->all();
         $commonWith = array_values(array_diff($with, self::GROUP_ONLY_RELATIONS));
 
-        $formulas = Component::query()
-            ->where('configurator_id', $evaluation->configuration->configurator_id)
-            ->where('type', ComponentType::Calculation)
-            ->first()?->config['formulas'] ?? [];
+        $formulas = $evaluation->configuration->configurator->calculations
+            ->pluck('expression', 'name')
+            ->all();
 
         $referencedIds = [
             ...$this->scanReferences(array_keys($functions), [

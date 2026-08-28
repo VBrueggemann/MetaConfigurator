@@ -16,6 +16,7 @@ class Configurator extends Model
     protected $fillable = [
         'name',
         'slug',
+        'scope_depth',
     ];
 
     protected static function booted(): void
@@ -57,8 +58,8 @@ class Configurator extends Model
         return $this->hasMany(Configuration::class);
     }
 
-    public function components(): HasMany
+    public function calculations(): HasMany
     {
-        return $this->hasMany(Component::class);
+        return $this->hasMany(Calculation::class);
     }
 }

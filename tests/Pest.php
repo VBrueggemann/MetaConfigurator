@@ -6,6 +6,7 @@ use App\Enums\ViewType;
 use App\Models\Answer;
 use App\Models\AnswerChunk;
 use App\Models\Configuration;
+use App\Models\Configurator;
 use App\Models\Rule;
 use App\Models\View;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -71,6 +72,16 @@ function answer(Configuration $configuration, View $view, mixed $value): ?Answer
         'answer_chunk_id' => $chunk->id,
         'value' => $value,
     ]);
+}
+
+/**
+ * @param  array<string, string>  $formulas
+ */
+function seedCalculations(Configurator $configurator, array $formulas): void
+{
+    $configurator->calculations()->createMany(
+        collect($formulas)->map(fn (string $expression, string $name) => ['name' => $name, 'expression' => $expression])->values()->all()
+    );
 }
 
 /**

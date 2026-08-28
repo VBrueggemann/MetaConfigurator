@@ -3,7 +3,6 @@
 namespace App\Actions\Pipeline;
 
 use App\Actions\DTO\ConfigurationEvaluation;
-use App\Enums\ComponentType;
 use App\Enums\RuleComponent;
 use App\Exceptions\ValidationFailedException;
 use App\Models\Rule;
@@ -15,7 +14,7 @@ final class GuardValidationFailure
 {
     public function __invoke(ConfigurationEvaluation $evaluation, Closure $next): mixed
     {
-        $roots = collect($evaluation->componentContexts[ComponentType::Scope->value] ?? []);
+        $roots = collect($evaluation->componentContexts['scope'] ?? []);
 
         if ($this->hasFailingValidationRule($roots)) {
             throw new ValidationFailedException($roots->toList()->pluck('id')->all());

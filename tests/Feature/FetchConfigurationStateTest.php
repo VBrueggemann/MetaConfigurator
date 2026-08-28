@@ -3,7 +3,6 @@
 use App\Actions\DTO\PendingAnswer;
 use App\Actions\FetchConfigurationState;
 use App\Models\Answer;
-use App\Models\Component;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\Rule;
@@ -81,7 +80,7 @@ it('reveals only the current unanswered step (just_next strategy)', function () 
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
     $name = View::factory()->textInput()->childOf($groupOne)->create();
     Rule::factory()->validation("answer('{$name->id}') != null")->create(['view_id' => $name->id]);
-    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -96,7 +95,7 @@ it('advances scope to the next step once the current one has any answer', functi
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
-    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     answer($configuration, $groupOne, true);
@@ -111,7 +110,7 @@ it('anchors scope at an explicitly requested view instead of the computed next s
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
-    Component::factory()->scope(depth: 1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
     answer($configuration, $groupOne, true);
@@ -127,7 +126,7 @@ it('ignores a requested anchor that is not an existing relevant chunk, falling b
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
-    Component::factory()->scope(depth: 1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -158,7 +157,7 @@ it('does not advance scope from a pending answer alone', function () {
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $groupOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
     $groupTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
-    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 

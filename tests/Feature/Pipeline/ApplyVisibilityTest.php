@@ -4,7 +4,6 @@ use App\Actions\DTO\ConfigurationEvaluation;
 use App\Actions\DTO\PendingAnswer;
 use App\Actions\Pipeline\ApplyFlow;
 use App\Actions\Pipeline\ApplyVisibility;
-use App\Models\Component;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\Rule;
@@ -37,7 +36,7 @@ it('prunes an invisible view and its descendants from the scope tree', function 
     $childB = View::factory()->group()->childOf($root)->create(['order' => 1]);
     $grandchild = View::factory()->textInput()->childOf($childB)->create(['order' => 0]);
     Rule::factory()->visibility('false')->create(['view_id' => $childB->id]);
-    Component::factory()->scope(0)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 0]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -50,7 +49,7 @@ it('prunes an invisible view and its descendants from the scope tree', function 
 it('no longer exposes a separate componentContexts visibility side-map', function () {
     $configurator = Configurator::factory()->create();
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
-    Component::factory()->scope(0)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 0]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -64,7 +63,7 @@ it('does not hide the anchor view via its own visibility rule', function () {
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $child = View::factory()->group()->childOf($root)->create(['order' => 0]);
     Rule::factory()->visibility('false')->create(['view_id' => $child->id]);
-    Component::factory()->scope(1)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 1]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -79,7 +78,7 @@ it('still filters out pending answers for invisible views', function () {
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $hidden = View::factory()->textInput()->childOf($root)->create(['order' => 0]);
     Rule::factory()->visibility('false')->create(['view_id' => $hidden->id]);
-    Component::factory()->scope(0)->create(['configurator_id' => $configurator->id]);
+    $configurator->update(['scope_depth' => 0]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 

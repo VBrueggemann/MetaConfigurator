@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Component;
 use App\Models\Configurator;
 use App\Models\Rule;
 use App\Models\View;
@@ -77,8 +76,10 @@ class RockBandGearConfiguratorSeeder extends Seeder
 
         $this->wireLinearFlow($steps);
 
-        Component::factory()->calculation($this->formulas)->create(['configurator_id' => $configurator->id]);
-        Component::factory()->scope(depth: $this->depth)->create(['configurator_id' => $configurator->id]);
+        $configurator->calculations()->createMany(
+            collect($this->formulas)->map(fn (string $expression, string $name) => ['name' => $name, 'expression' => $expression])->values()->all()
+        );
+        $configurator->update(['scope_depth' => $this->depth]);
 
         $this->command?->info('   Configurator: '.route('configurators.play', ['configurator' => $configurator]));
     }
