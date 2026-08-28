@@ -112,3 +112,123 @@ Found via re-profiling on 2026-08-27, after the five items above landed.
       has no memory limit or eviction policy. Every rule/formula/label edit mints a new cache key; old ones
       never expire. Not urgent, but worth a TTL or `maxmemory-policy` before this runs unattended in
       production for a long time.
+
+## Data model (`app/Models/Component.php`)
+
+- [ ] **Fold `Component` into `Configurator` — it's a generic `type => config` table that only ever holds two rows.**
+      `components` has a `unique(['configurator_id', 'type'])` constraint and `ComponentType` has seven cases,
+      but in practice only `ComponentType::Scope` (`config: {depth}`) and `ComponentType::Calculation`
+      (`config: {formulas}`) rows are ever created — `ComponentFactory` only defines `scope()`/`calculation()`
+      states, and every seeder (`RockBandGearConfiguratorSeeder`, `WidgetShowcaseSeeder`,
+      `FictionalSurveySeeder`, `TemplatingShowcaseSeeder`, `WienerbergerWevoltSeeder`) and every test that
+      creates a `Component` uses one of those two. The remaining cases (`Visibility`, `Validation`,
+      `AnsweredViews`, `Breadcrumbs`, `PendingViews`) are never persisted — they're only used as string keys
+      into the in-memory `ConfigurationEvaluation::$componentContexts` array set by pipeline stages
+      (`ApplyFlow.php:66,71`, `ApplyBreadcrumbs.php:18`), unrelated to the DB table.
+
+      Every DB read of `Component` today (`ApplyFlow.php:27`, `ApplyCalculation.php:21`,
+      `CollectAndBatchFetchExternalReferences.php:26`) is already scoped to one configurator and one known
+      type, so replacing the table with `scope_depth` (int) and `calculation_formulas` (json) columns directly
+      on `configurators` collapses each of those into a plain attribute read — no query at all, since
+      `configurator` is already eager-loaded onto `$evaluation->configuration` before the pipeline runs
+      (`FetchConfigurationState.php:28`, `CommitConfigurationAnswers.php:31` both `loadMissing('configurator.rootView')`).
+      Removes `app/Models/Component.php`, `database/factories/ComponentFactory.php`, the DB-backed half of
+      `ComponentType`, and the `components` table (new drop migration, don't edit the create migration).
+      Touches every seeder and test listed above.
+
+      Open question for `calculation_formulas`: unlike `scope_depth` (a single scalar), a configurator's
+      formulas are a *named list* (`{name: expression}`), which is a less natural fit for one JSON column than
+      `scope_depth` is. Worth considering a dedicated `calculations` table (one row per formula: `configurator_id`,
+      `name`, `expression`) instead of a JSON blob column — trades one extra join/eager-load for per-formula
+      rows that are individually indexable, queryable, and diffable, at the cost of reintroducing a second
+      table (i.e. partially undoing the "fold into `Configurator`" simplification this item is chasing). Decide
+      json-column vs. own-table before implementing either half of this item.
+
+## Expression evaluation (`app/Actions/Pipeline/ApplyCalculation.php`, `app/Actions/Pipeline/ResolveModelFunction.php`)
+
+- [ ] **Move cycle detection out of the per-request evaluation pipeline into a one-time "prebake" step on the configurator.**
+      Two independent runtime guards exist today: `ApplyCalculation::topologicalOrder` DFS-checks
+      `calculation.<name>` formulas for circular dependencies on every evaluation (throws
+      `RuntimeException`, tested in `tests/Feature/Pipeline/ApplyCalculationTest.php:65-78`), and
+      `ResolveModelFunction`'s `__resolving` stack catches circular references through templating functions
+      generally — e.g. a `label()` chain that loops back on itself (tested in
+      `tests/Feature/Pipeline/ResolveTemplateStringsTest.php:144+`). Both re-derive the same answer (is this
+      configurator's formula/reference graph acyclic?) on every single request, even though the graph only
+      changes when the configurator's rules/formulas/labels are edited.
+      Reason to remove: the runtime cost and code complexity of re-checking on every evaluation isn't wanted —
+      cycle-freedom should instead be established once, in a "prebake" step that runs when a configurator is
+      saved/published, not on the hot path. Open question to resolve before removing the runtime guards:
+      where the prebake step lives, what it validates (formula graph only, or also the templating-function
+      graph `ResolveModelFunction` currently guards), and what happens to a configurator that fails prebake
+      (reject the save, or flag and allow with a warning). Until that lands, removing the runtime guards
+      outright would turn a circular formula/reference into an infinite loop / stack overflow at evaluation
+      time instead of a caught error.
+
+- [ ] **Audit every pipeline stage for prebake potential, not just the two cycle-detection guards above.**
+      `FetchConfigurationState` and `CommitConfigurationAnswers` both run the same eight/ten-stage pipeline on
+      every request (`GuardAnchorOverride`, `ApplyFlow`, `CollectAndBatchFetchExternalReferences`,
+      `ApplyCalculation`, `ApplyVisibility`, `ApplyValidation`, `ResolveTemplateStrings`, `ApplyBreadcrumbs`
+      and, for commits, `GuardValidationFailure`, `SupersedeAnswerChunks`, `CommitAnswers` — all in
+      `app/Actions/Pipeline/`). The cycle-detection item above was found by looking for one specific pattern
+      (repeated-but-static graph checks); no one has gone stage by stage asking the general question. For each
+      stage, work out: what scope it actually needs (whole tree vs. current branch vs. single view — c.f. the
+      `ApplyFlow`/`CollectAndBatchFetchExternalReferences` fixes in the "Pipeline performance" section above,
+      which narrowed scope for two stages already), which of its calls are resource-heavy (DB queries, full
+      collection scans over the tree), how much of its logic is inherent per-request work (depends on the
+      answers given so far) vs. static per-configurator work that only changes when the configurator is
+      edited, and — for the static part — whether it's a prebake candidate. Output should be one write-up per
+      stage (or a "nothing to do here" note) added to this file, not a single blanket rewrite; some stages
+      (e.g. anything reading `relevantAnswers`) are inherently per-request and won't have a prebake half.
+
+- [ ] **Rework what goes into the `ExpressionLanguage` evaluation context — always-included vs. cheap-to-include vs. lazy, plus a prebake-backed cache.**
+      Today `CollectAndBatchFetchExternalReferences.php:57-61` builds the *entire* context up front, every
+      request, regardless of which specific expression ends up being evaluated: it regex-scans every scope
+      view's templatable strings and rule expressions plus every calculation formula (`scanReferences`,
+      `referencesThis`) to find every possibly-referenced view id, batch-fetches all of them
+      (`$modelsById`), and stuffs in `calculationFormulas`, `relevantAnswers`, `relevantAnswerChunks`, and
+      `pendingAnswers`. `ApplyCalculation.php:19-24` similarly evaluates *every* formula
+      (`resolve()`/`topologicalOrder()`) every request, not just the ones a given `label()`/rule/validation
+      actually references. Nothing about this is lazy today — the eager batch-fetch already replaced N+1
+      per-reference queries with one upfront pass (see the "Pipeline performance" items above), but it still
+      does that pass unconditionally rather than only for what's actually needed this evaluation.
+
+      Work needed: go through every context key (`modelsById`, `calculationFormulas`, `calculation`,
+      `relevantAnswers`, `relevantAnswerChunks`, `pendingAnswers`, `this`, `__resolving`, `__persistedOnly`)
+      and classify it — always needed (cheap and used by nearly every expression, e.g. `relevantAnswers`),
+      cheap enough to always include even if unused this evaluation (small, already in memory), or a genuine
+      lazy-load candidate (expensive and only sometimes referenced, e.g. `modelsById` external views,
+      individual formula results) that should resolve on first access from the expression instead of
+      being precomputed for the whole scope. `ResolveModelFunction`'s per-call resolution
+      (`app/Actions/Pipeline/ResolveModelFunction.php`) is already lazy in shape — it resolves one
+      `modelClass:id:function` at a time — so laziness for `modelsById` may be a matter of deferring the
+      batch-fetch until first access rather than restructuring the resolution path.
+
+      Then: since the referenced-id graph (`scanReferences`/`referencesThis`'s output) and the formula
+      dependency graph (`ApplyCalculation::topologicalOrder`) are both static per-configurator — they only
+      depend on rule/template/formula text, never on answers — both are candidates to compute once during the
+      "prebake" step from the cycle-detection item above and cache the result, instead of re-deriving them via
+      regex/DFS on every request. Cache invalidation needs a lookup generated at prebake time (e.g. a
+      content-hash or version stamp of the configurator's rules/views/formulas) so an edit reliably busts the
+      cache — same shape of problem the parse-cache TTL note in the "Pipeline performance" section above is
+      still open on, worth solving once for both.
+
+## Testing (`tests/`)
+
+- [ ] **Add a Pest architecture test suite — some prose conventions in `.ai/rules`/Boost guidelines are mechanically enforceable and should stop relying on an agent reading the rule file.**
+      `.ai/rules` currently documents several structural conventions as prose that a Pest `arch()` expectation
+      could check directly instead, e.g. after each edit:
+      - `livewire.md` — "No direct DB queries in Livewire components": `arch()->expect('App\Livewire')->not->toUse(['Illuminate\Database\Eloquent\Builder', 'Illuminate\Support\Facades\DB'])` (or similar) catches a component reaching for a query directly instead of going through an Action/Query/pipeline `componentContexts`.
+      - `app-actions.md` — "DTOs live in `app/Actions/DTO/`": every class directly under `App\Actions` (excluding `App\Actions\DTO` and `App\Actions\Pipeline`) should have an `__invoke()` method; every class under `App\Actions\DTO` should not.
+      - `actions.md` — single-purpose Actions have exactly one public method, `__invoke()`, verb-first name — arch can check "has `__invoke`"; check what Pest 5's arch API can express for "only one public method" and naming pattern, since that part may need a custom expectation instead of a built-in one.
+      - `models.md` — "Domain models use `HasUuids`": `arch()->expect('App\Models')->toUse(Illuminate\Database\Eloquent\Concerns\HasUuids::class)`, scoped to exclude any framework model that keeps auto-increment ids (none currently, but don't assume that stays true).
+      - `rules-engine.md` — "an Action never belongs in `Pipeline/` unless something else's pipeline invokes it" and the two pipelines' stage lists themselves are candidates for a narrower check (e.g. every class in `App\Actions\Pipeline` is only referenced from `FetchConfigurationState`/`CommitConfigurationAnswers`'s `->through([...])` arrays) — likely needs a custom arch expectation or a plain reflection-based test, not a stock `toUse`/`toOnlyBeUsedIn` one; check what's available before assuming it's expressible.
+      - `app.md` — "prefer global helpers over facades/`new`'d classes" is a weaker candidate: broadly true but has legitimate exceptions (see the rule's own carve-out), so a blanket `not->toUse` would false-positive; skip unless a narrower, exception-free version of the rule can be stated.
+
+      Where an arch test can express a rule exactly, add the test and shrink the corresponding `.ai/rules` prose
+      to point at it ("enforced by `tests/Arch/...`") instead of restating the constraint, so the two can't
+      silently drift — the test is the enforcement, the rule file stays for the *why* an agent still needs to
+      know. Where a rule turns out not to be cleanly expressible (mixed-in exceptions, needs call-site/usage
+      analysis rather than class metadata), leave it as prose and note in this TODO why it didn't fit rather
+      than forcing a brittle approximation. Check `pestphp/pest-plugin-arch`'s actual capabilities in this
+      project's installed Pest version (`composer show pestphp/pest` — CLAUDE.md's Foundational Context: don't
+      assume API surface from a different major version) before committing to specific expectations above.
