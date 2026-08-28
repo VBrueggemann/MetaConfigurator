@@ -8,6 +8,7 @@ use App\Actions\Pipeline\ApplyCalculation;
 use App\Actions\Pipeline\ApplyFlow;
 use App\Actions\Pipeline\ApplyValidation;
 use App\Actions\Pipeline\ApplyVisibility;
+use App\Actions\Pipeline\BakeConfiguratorGraphs;
 use App\Actions\Pipeline\CollectAndBatchFetchExternalReferences;
 use App\Actions\Pipeline\CommitAnswers;
 use App\Actions\Pipeline\GuardAnchorOverride;
@@ -38,6 +39,7 @@ final class CommitConfigurationAnswers
             return app(Pipeline::class)
                 ->send($evaluation)
                 ->through([
+                    BakeConfiguratorGraphs::class,
                     GuardAnchorOverride::class,
                     ApplyFlow::class,
                     CollectAndBatchFetchExternalReferences::class,

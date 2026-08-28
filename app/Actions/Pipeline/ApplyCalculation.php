@@ -4,7 +4,6 @@ namespace App\Actions\Pipeline;
 
 use App\Actions\DTO\ConfigurationEvaluation;
 use Closure;
-use RuntimeException;
 use Throwable;
 
 final class ApplyCalculation
@@ -53,6 +52,8 @@ final class ApplyCalculation
 
     /**
      * Orders formulas so a formula referencing `calculation.<name>` is evaluated after `<name>`.
+     * Assumes an acyclic dependency graph — `BakeConfiguratorGraphs` asserts that once per
+     * configurator before this stage ever runs.
      *
      * @param  array<string, string>  $formulas
      * @return list<string>
@@ -67,24 +68,16 @@ final class ApplyCalculation
         }
 
         $resolved = [];
-        $visiting = [];
 
-        $visit = function (string $name) use (&$visit, &$resolved, &$visiting, $dependenciesByName): void {
+        $visit = function (string $name) use (&$visit, &$resolved, $dependenciesByName): void {
             if (in_array($name, $resolved, true)) {
                 return;
             }
-
-            if (in_array($name, $visiting, true)) {
-                throw new RuntimeException("Circular calculation dependency involving '{$name}'.");
-            }
-
-            $visiting[] = $name;
 
             foreach ($dependenciesByName[$name] as $dependency) {
                 $visit($dependency);
             }
 
-            $visiting = array_diff($visiting, [$name]);
             $resolved[] = $name;
         };
 

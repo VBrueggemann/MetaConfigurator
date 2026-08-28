@@ -181,48 +181,43 @@ Found via re-profiling on 2026-08-27, after the five items above landed.
 
 ## Expression evaluation (`app/Actions/Pipeline/ApplyCalculation.php`, `app/Actions/Pipeline/ResolveModelFunction.php`)
 
-- [ ] **Move cycle detection out of the per-request evaluation pipeline into a one-time bake step on the configurator.**
-      Two independent runtime guards exist today: `ApplyCalculation::topologicalOrder` DFS-checks
-      `calculation.<name>` formulas for circular dependencies on every evaluation (throws
-      `RuntimeException`, tested in `tests/Feature/Pipeline/ApplyCalculationTest.php:65-78`), and
-      `ResolveModelFunction`'s `__resolving` stack catches circular references through templating functions
-      generally — e.g. a `label()` chain that loops back on itself (tested in
-      `tests/Feature/Pipeline/ResolveTemplateStringsTest.php:144+`). Both re-derive the same answer (is this
-      configurator's formula/reference graph acyclic?) on every single request, even though the graph only
-      changes when the configurator's rules/formulas/labels are edited.
+- [x] **Move cycle detection out of the per-request evaluation pipeline into a one-time bake step on the configurator.**
+      Fixed 2026-08-28: added a `graphs_acyclic` boolean on `Configurator` (default `false`) and a new
+      `BakeConfiguratorGraphs` pipeline stage (`app/Actions/Pipeline/BakeConfiguratorGraphs.php`) that runs first
+      in both `FetchConfigurationState` and `CommitConfigurationAnswers`. While the flag is `false` it builds two
+      graphs — the `Calculation` dependency graph (same `calculation.<name>` regex `ApplyCalculation` already
+      used) and a `View` label-reference graph — asserts both acyclic (`RuntimeException` on a real cycle), then
+      persists `graphs_acyclic = true`; once `true` it's a single already-loaded-attribute check, no graph walk.
+      `ApplyCalculation::topologicalOrder` dropped its `visiting`-set/throw branch entirely (still computes
+      evaluation order, just trusts the graph is acyclic instead of re-proving it), and `ResolveModelFunction`'s
+      `__resolving` stack is gone outright.
 
-      Design settled via grilling on 2026-08-28 (depends on the `Template` model item above landing first, since
-      this reads `Template` + `Calculation` rather than walking `View.config`/`Rule.meta` JSON):
+      Narrower graph than originally planned: turns out `label()` is the *only* templating function whose
+      resolver recurses (it calls `ResolveTemplate` again on the target's own `label` template) —
+      `answer()`/`validationError()` just read already-resolved data and never re-enter template resolution. So
+      a genuine cycle can only ever form through `label()`-to-`label()` chains; `content`/`message`/`option_label`
+      templates can *call into* that graph but are never themselves a re-entry target (there's no `content()`
+      function), so they can't participate in an actual cycle. The bake step's label graph reflects this: nodes
+      are views with a `label` `Template`, edges are literal `label('id')` occurrences inside that template text
+      only — not a scan of all four templatable fields.
 
-      - **Drop both runtime guards, not just the calculation one.** Checked whether removing
-        `ResolveModelFunction`'s guard is safe given `CollectAndBatchFetchExternalReferences::scanReferences`'s
-        regex only matches a quoted-literal argument (`/\b(fn)\(\s*['"]([^'"]+)['"]\s*\)/`) — a
-        dynamically-computed id (`answer(otherAnswer())`) is already invisible to that scan today, so it never
-        lands in `modelsById`, so `ResolveModelFunction` already throws "Unknown reference" before a cycle could
-        form. Every cycle that can actually occur through `answer()`/`label()`/`validationError()` is built from
-        literal ids, which a static scan finds completely — no blind spot, safe to remove both guards.
+      Also tightened, deliberately, after being flagged and confirmed by the user: a circular **label** reference
+      used to degrade gracefully (`ResolveTemplate`'s own `catch (Throwable)` swallowed the old
+      `ResolveModelFunction` exception and rendered the raw `{{ label(...) }}` text, rest of the page still
+      worked). It's now a hard bake-time failure, same as a circular **calculation** dependency always was — the
+      whole evaluation throws instead of one spot looking broken. Chosen over keeping it soft (which would've
+      meant leaving `ResolveModelFunction`'s guard in place just for `label()`) because a circular label reference
+      is always an authoring bug, never legitimate, and failing loudly once beats silently shipping broken text
+      indefinitely. `tests/Feature/Pipeline/ResolveTemplateStringsTest.php`'s circular-label test now asserts
+      `toThrow(...)` instead of the old fallback-string assertion; `tests/Feature/Pipeline/BakeConfiguratorGraphsTest.php`
+      covers the stage directly (bakes to `true` on a clean configurator, is a zero-query no-op once already
+      `true`, throws on each kind of cycle without persisting `true`).
 
-      - **One boolean on `Configurator`** (e.g. `graphs_acyclic`), covering both graphs — the `Calculation`
-        dependency graph and the `Template`/`Rule` literal-id reference graph — not one flag per graph. A single
-        flag stays simpler and loses nothing for debugging, since the exception thrown on a real cycle already
-        names the offending key/id (same as today, just relocated to bake time).
-
-      - **Defaults to `false`.** There's no configurator-builder/editor UI yet (only the 5 seeders create
-        `Configurator`/`Template`/`Calculation` rows), so nothing bakes the graph at "save" time today. Instead: a
-        new early pipeline stage checks the flag; if `false`, it builds both graphs, throws the same
-        `RuntimeException` as today if either is cyclic, otherwise persists `graphs_acyclic = true` on the
-        `Configurator` and continues. If `true`, it's a single already-loaded-attribute check, no graph walk. So
-        today the first evaluation of a freshly-seeded configurator pays for one bake; every request after is
-        O(1). Once a real editor exists, its save action becomes responsible for baking eagerly at save time
-        instead — a configurator then never reaches evaluation un-baked at all, and this stage's `false` branch
-        becomes dead code for anything saved through the editor.
-
-      - **On a cycle: throw**, same as today (`RuntimeException`) — not flag-and-allow. Every existing test
-        already expects a hard failure on a cyclic graph, so this is the smallest possible behavioral diff from
-        today. Revisit flag-and-allow (degrading via `ApplyCalculation::resolve`'s existing
-        `catch (Throwable)`-and-fallback path) or failing at the `PlayConfigurator` UI boundary instead, once
-        there's an actual editor UI where surfacing "this configurator is broken" to its author is a reachable
-        moment, rather than a dev-only seeder mistake.
+      `tests/Feature/Pipeline/PipelineQueryCountTest.php`'s "already-answered steps" scenario needed a
+      `'graphs_acyclic' => true` on its shared `Configurator` — it reuses one configurator for two `Configuration`s
+      and compares query counts between them, so without pre-baking, the first of the two calls silently absorbed
+      the one-time bake cost and the second didn't, making the two counts spuriously unequal. Not a real scaling
+      regression, just that test's setup needing to reflect steady-state (post-bake) cost rather than first-ever-request cost.
 
 - [ ] **Audit every pipeline stage for prebake potential, not just the two cycle-detection guards above.**
       `FetchConfigurationState` and `CommitConfigurationAnswers` both run the same eight/ten-stage pipeline on

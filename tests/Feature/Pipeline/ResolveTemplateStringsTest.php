@@ -129,7 +129,7 @@ it('resolves validationError() as empty for a failing rule on a view that was ne
     expect($resolvedSummary->config['content'])->toBe('Rule says: ');
 });
 
-it('breaks a circular label reference instead of looping forever', function () {
+it('throws on a circular label reference instead of looping forever', function () {
     $configurator = Configurator::factory()->create();
     $root = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $a = View::factory()->group()->childOf($root)->create();
@@ -140,11 +140,8 @@ it('breaks a circular label reference instead of looping forever', function () {
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
-    $evaluation = app(FetchConfigurationState::class)($configuration);
-
-    $resolvedA = $evaluation->componentContexts['scope']->first()->children->firstWhere('id', $a->id);
-
-    expect($resolvedA->config['label'])->toContain('{{ label(');
+    expect(fn () => app(FetchConfigurationState::class)($configuration))
+        ->toThrow(RuntimeException::class, "Circular label reference involving view '{$a->id}'.");
 });
 
 it('templates the validation message with a pending answer at fetch time', function () {

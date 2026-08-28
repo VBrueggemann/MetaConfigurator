@@ -17,6 +17,11 @@ class Configurator extends Model
         'name',
         'slug',
         'scope_depth',
+        'graphs_acyclic',
+    ];
+
+    protected $casts = [
+        'graphs_acyclic' => 'bool',
     ];
 
     protected static function booted(): void
