@@ -121,9 +121,8 @@ it('resolves a failing rule\'s templated message before aborting the commit', fu
     $configurator = Configurator::factory()->create();
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $name = View::factory()->textInput()->childOf($group)->create();
-    Rule::factory()->validation('false')->create([
+    Rule::factory()->validation('false')->message("Must not be {{ answer('{$name->id}') }}")->create([
         'view_id' => $name->id,
-        'meta' => ['message' => "Must not be {{ answer('{$name->id}') }}"],
     ]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);

@@ -26,10 +26,14 @@ class ConfiguratorAnalyticsPage extends Component
         $options = $view->config['options'] ?? null;
 
         if (is_array($options)) {
-            $option = collect($options)->firstWhere('value', $value);
+            $index = collect($options)->search(fn (array $option) => ($option['value'] ?? null) == $value);
 
-            if ($option !== null) {
-                return (string) ($option['label'] ?? $value);
+            $label = $index !== false
+                ? $view->templates->first(fn ($template) => $template->key === 'option_label' && $template->order === $index)?->template
+                : null;
+
+            if ($label !== null) {
+                return $label;
             }
         }
 

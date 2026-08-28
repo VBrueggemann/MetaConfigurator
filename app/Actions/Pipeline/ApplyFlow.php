@@ -53,7 +53,12 @@ final class ApplyFlow
             $nextView = $rootView;
         }
 
-        $nextView->loadMissing(['bloodline' => fn ($q) => $q->depthFirst(), 'bloodline.rules']);
+        $nextView->loadMissing([
+            'bloodline' => fn ($q) => $q->depthFirst(),
+            'bloodline.rules',
+            'bloodline.templates',
+            'bloodline.rules.templates',
+        ]);
 
         $evaluation->anchorViewId = $nextView->id;
         $evaluation->componentContexts['scope'] = $nextView->bloodline->toTree();

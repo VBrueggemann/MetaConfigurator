@@ -111,7 +111,7 @@ class RockBandGearConfiguratorSeeder extends Seeder
 
         Rule::factory()->validation(
             "answer('{$needGuitar->id}') == true || answer('{$needBass->id}') == true || answer('{$needVocals->id}') == true || answer('{$needDrums->id}') == true"
-        )->create(['view_id' => $picker->id, 'meta' => ['message' => 'Pick at least one instrument to start building your rig.']]);
+        )->message('Pick at least one instrument to start building your rig.')->create(['view_id' => $picker->id]);
 
         $this->addRunningTotal($intro, $o);
 
@@ -133,7 +133,7 @@ class RockBandGearConfiguratorSeeder extends Seeder
             ['value' => 'Acoustic', 'label' => 'Acoustic'],
         ], 'Electric or acoustic?')->updateOn('live')->childOf($step1)->create(['order' => $o++]);
         Rule::factory()->validation('answer(this) != null')
-            ->create(['view_id' => $type->id, 'meta' => ['message' => 'Please choose electric or acoustic.']]);
+            ->message('Please choose electric or acoustic.')->create(['view_id' => $type->id]);
 
         $brand = $this->pricedChoice($step1, $o, 'cardRadio', [
             ['value' => 'Squier', 'label' => 'Squier', 'price' => 189, 'icon' => '🎸', 'subtitle' => 'Budget friendly'],
@@ -144,7 +144,7 @@ class RockBandGearConfiguratorSeeder extends Seeder
             ['value' => 'Gibson', 'label' => 'Gibson', 'price' => 1899, 'icon' => '🎸', 'subtitle' => 'Iconic American craft'],
         ], 'Choose your guitar brand', 'guitarBrandPrice');
         Rule::factory()->validation('answer(this) != null')
-            ->create(['view_id' => $brand->id, 'meta' => ['message' => 'Please choose a guitar brand.']]);
+            ->message('Please choose a guitar brand.')->create(['view_id' => $brand->id]);
 
         $this->addRunningTotal($step1, $o);
 
@@ -285,7 +285,7 @@ class RockBandGearConfiguratorSeeder extends Seeder
             ['value' => 'Music Man', 'label' => 'Music Man', 'price' => 1499, 'icon' => '🎸', 'subtitle' => 'Studio favorite'],
         ], 'Choose your bass brand', 'bassBrandPrice');
         Rule::factory()->validation('answer(this) != null')
-            ->create(['view_id' => $brand->id, 'meta' => ['message' => 'Please choose a bass brand.']]);
+            ->message('Please choose a bass brand.')->create(['view_id' => $brand->id]);
 
         $body = $this->pricedChoice($step1, $o, 'cardRadio', [
             ['value' => 'Precision Style', 'label' => 'Precision Style', 'price' => 0],
@@ -383,7 +383,7 @@ class RockBandGearConfiguratorSeeder extends Seeder
             ['value' => 'Wireless Handheld System', 'label' => 'Wireless Handheld System', 'price' => 349, 'icon' => '📡'],
         ], 'Microphone', 'vocalsMicPrice');
         Rule::factory()->validation('answer(this) != null')
-            ->create(['view_id' => $mic->id, 'meta' => ['message' => 'Please choose a microphone.']]);
+            ->message('Please choose a microphone.')->create(['view_id' => $mic->id]);
 
         $stand = $this->pricedChoice($step1, $o, 'radio', [
             ['value' => 'Tabletop Stand', 'label' => 'Tabletop Stand', 'price' => 19],
@@ -442,7 +442,7 @@ class RockBandGearConfiguratorSeeder extends Seeder
             ['value' => 'Acoustic 5-Piece Pro', 'label' => 'Acoustic 5-Piece Pro', 'price' => 1499, 'icon' => '🥁'],
         ], 'Kit type', 'drumsKitPrice');
         Rule::factory()->validation('answer(this) != null')
-            ->create(['view_id' => $kit->id, 'meta' => ['message' => 'Please choose a kit type.']]);
+            ->message('Please choose a kit type.')->create(['view_id' => $kit->id]);
 
         $acousticExpr = "answer('{$kit->id}') == 'Acoustic 5-Piece Starter' || answer('{$kit->id}') == 'Acoustic 5-Piece Pro'";
 

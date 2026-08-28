@@ -22,7 +22,13 @@ class WienerbergerWevoltSeeder extends Seeder
         $roofAreaField = View::factory()->number('Wie groß ist Ihre Dachfläche?')
             ->updateOn('live')->childOf($page)->create(['order' => 0]);
 
-        $liveEstimate = View::factory()->html('placeholder')->childOf($page)->create(['order' => 1]);
+        $liveEstimate = View::factory()->html(implode('<br>', [
+            '<strong>Ihre Live-Schätzung</strong>',
+            'Geschätzte Anlagengröße: {{ calculation.systemSizeKwp }} kWp',
+            'Geschätzte Jahresproduktion: {{ calculation.annualProductionKwh }} kWh/Jahr',
+            'Geschätzter Jahresverbrauch: {{ calculation.annualConsumptionKwh }} kWh/Jahr',
+            'Geschätzte jährliche Ersparnis: {{ calculation.estimatedAnnualSavingsEur }} €',
+        ]))->childOf($page)->create(['order' => 1]);
 
         $roofShapeField = View::factory()->radio([
             ['value' => 'pultdach', 'label' => 'Pultdach'],
@@ -120,14 +126,6 @@ class WienerbergerWevoltSeeder extends Seeder
         View::factory()->html('Thank you! Your configuration has been submitted.')
             ->childOf($success)->create(['order' => 0]);
 
-        $liveEstimate->update(['config' => ['content' => implode('<br>', [
-            '<strong>Ihre Live-Schätzung</strong>',
-            'Geschätzte Anlagengröße: {{ calculation.systemSizeKwp }} kWp',
-            'Geschätzte Jahresproduktion: {{ calculation.annualProductionKwh }} kWh/Jahr',
-            'Geschätzter Jahresverbrauch: {{ calculation.annualConsumptionKwh }} kWh/Jahr',
-            'Geschätzte jährliche Ersparnis: {{ calculation.estimatedAnnualSavingsEur }} €',
-        ])]]);
-
         $configurator->calculations()->createMany([
             ['name' => 'systemSizeKwp', 'expression' => "(answer('{$roofAreaField->id}') ?? 0) * 0.18"],
             ['name' => 'annualProductionKwh', 'expression' => 'calculation.systemSizeKwp * 950'],
@@ -136,29 +134,29 @@ class WienerbergerWevoltSeeder extends Seeder
         ]);
 
         Rule::factory()->validation('answer(this) != null && answer(this) > 0')
-            ->create(['view_id' => $roofAreaField->id, 'meta' => ['message' => 'Bitte geben Sie die Dachfläche in Quadratmetern an.']]);
+            ->message('Bitte geben Sie die Dachfläche in Quadratmetern an.')->create(['view_id' => $roofAreaField->id]);
         Rule::factory()->validation('answer(this) != null')
-            ->create(['view_id' => $roofShapeField->id, 'meta' => ['message' => 'Bitte wählen Sie eine Dachform aus.']]);
+            ->message('Bitte wählen Sie eine Dachform aus.')->create(['view_id' => $roofShapeField->id]);
         Rule::factory()->validation('answer(this) != null && strlen(answer(this)) > 0')
-            ->create(['view_id' => $roofOrientationField->id, 'meta' => ['message' => 'Bitte geben Sie die Ausrichtung des Daches an.']]);
+            ->message('Bitte geben Sie die Ausrichtung des Daches an.')->create(['view_id' => $roofOrientationField->id]);
         Rule::factory()->validation('answer(this) != null')
-            ->create(['view_id' => $roofPitchField->id, 'meta' => ['message' => 'Bitte wählen Sie die Dachneigung aus.']]);
+            ->message('Bitte wählen Sie die Dachneigung aus.')->create(['view_id' => $roofPitchField->id]);
         Rule::factory()->validation('answer(this) != null')
-            ->create(['view_id' => $consumptionChoiceField->id, 'meta' => ['message' => 'Bitte wählen Sie Ihren Jahresstromverbrauch aus.']]);
+            ->message('Bitte wählen Sie Ihren Jahresstromverbrauch aus.')->create(['view_id' => $consumptionChoiceField->id]);
         Rule::factory()->validation('answer(this) != null && answer(this) > 0')
-            ->create(['view_id' => $consumptionExactField->id, 'meta' => ['message' => 'Bitte geben Sie Ihren genauen Jahresstromverbrauch an.']]);
+            ->message('Bitte geben Sie Ihren genauen Jahresstromverbrauch an.')->create(['view_id' => $consumptionExactField->id]);
         Rule::factory()->validation('answer(this) != null && answer(this) > 0')
-            ->create(['view_id' => $tariffField->id, 'meta' => ['message' => 'Bitte geben Sie Ihren aktuellen Strompreis an.']]);
+            ->message('Bitte geben Sie Ihren aktuellen Strompreis an.')->create(['view_id' => $tariffField->id]);
         Rule::factory()->validation('answer(this) != null')
-            ->create(['view_id' => $storageField->id, 'meta' => ['message' => 'Bitte wählen Sie aus, ob Sie einen Stromspeicher nutzen möchten.']]);
+            ->message('Bitte wählen Sie aus, ob Sie einen Stromspeicher nutzen möchten.')->create(['view_id' => $storageField->id]);
         Rule::factory()->validation('answer(this) != null')
-            ->create(['view_id' => $evPresenceField->id, 'meta' => ['message' => 'Bitte geben Sie an, ob Elektro-Autos vorhanden oder geplant sind.']]);
+            ->message('Bitte geben Sie an, ob Elektro-Autos vorhanden oder geplant sind.')->create(['view_id' => $evPresenceField->id]);
         Rule::factory()->validation('answer(this) != null')
-            ->create(['view_id' => $evCountField->id, 'meta' => ['message' => 'Bitte wählen Sie die Anzahl der Elektro-Autos aus.']]);
+            ->message('Bitte wählen Sie die Anzahl der Elektro-Autos aus.')->create(['view_id' => $evCountField->id]);
 
         Rule::factory()->validation(
             "(answer('{$addressField->id}') != null && strlen(answer('{$addressField->id}')) > 0) || answer('{$skipAddressField->id}') == true"
-        )->create(['view_id' => $partnerAddress->id, 'meta' => ['message' => 'Please enter your address, or check the box above.']]);
+        )->message('Please enter your address, or check the box above.')->create(['view_id' => $partnerAddress->id]);
 
         foreach ([
             $firstName->id => 'First name is required.',
@@ -173,11 +171,11 @@ class WienerbergerWevoltSeeder extends Seeder
             $city2->id => 'City is required.',
         ] as $viewId => $message) {
             Rule::factory()->validation('answer(this) != null && strlen(answer(this)) > 0')
-                ->create(['view_id' => $viewId, 'meta' => ['message' => $message]]);
+                ->message($message)->create(['view_id' => $viewId]);
         }
 
         Rule::factory()->validation('answer(this) == true')
-            ->create(['view_id' => $agree->id, 'meta' => ['message' => 'Please agree to the AGBs and privacy policy.']]);
+            ->message('Please agree to the AGBs and privacy policy.')->create(['view_id' => $agree->id]);
 
         Rule::factory()->visibility("answer('{$roofAreaField->id}') != null && answer('{$roofAreaField->id}') > 0")
             ->create(['view_id' => $liveEstimate->id]);

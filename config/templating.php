@@ -11,10 +11,12 @@ return [
     'functions' => [
         View::class => [
             'label' => [
-                'with' => [],
-                'resolve' => fn (View $view, array $context) => isset($view->config['label'])
-                    ? app(ResolveTemplate::class)($view->config['label'], $context)
-                    : null,
+                'with' => ['templates'],
+                'resolve' => function (View $view, array $context): mixed {
+                    $template = $view->templates->firstWhere('key', 'label');
+
+                    return $template !== null ? app(ResolveTemplate::class)($template->template, $context) : null;
+                },
             ],
             'answer' => [
                 'with' => ['descendants'],
@@ -59,18 +61,25 @@ return [
                 $views->each($walk);
             },
             'resolve' => function (Rule $rule, array $keys, ResolveTemplate $resolveTemplate, array $context): void {
-                $meta = $rule->meta;
+                $meta = $rule->meta ?? [];
+                $templatesByKey = $rule->templates->groupBy('key');
 
                 foreach ($keys as $key => $resolver) {
-                    if (isset($meta[$key])) {
-                        $meta[$key] = $resolver($meta[$key], $resolveTemplate, $context);
-                    }
+                    $meta = $resolver($meta, $templatesByKey->get($key, collect()), $resolveTemplate, $context);
                 }
 
                 $rule->meta = $meta;
             },
             'keys' => [
-                'message' => fn (string $template, ResolveTemplate $resolveTemplate, array $context) => $resolveTemplate($template, $context),
+                'message' => function (array $meta, Collection $templates, ResolveTemplate $resolveTemplate, array $context): array {
+                    $template = $templates->first();
+
+                    if ($template !== null) {
+                        $meta['message'] = $resolveTemplate($template->template, $context);
+                    }
+
+                    return $meta;
+                },
             ],
         ],
 
@@ -86,25 +95,49 @@ return [
             },
             'resolve' => function (View $view, array $keys, ResolveTemplate $resolveTemplate, array $context): void {
                 $config = $view->config;
+                $templatesByKey = $view->templates->groupBy('key');
 
                 foreach ($keys as $key => $resolver) {
-                    if (isset($config[$key])) {
-                        $config[$key] = $resolver($config[$key], $resolveTemplate, $context);
-                    }
+                    $config = $resolver($config, $templatesByKey->get($key, collect()), $resolveTemplate, $context);
                 }
 
                 $view->config = $config;
             },
             'keys' => [
-                'label' => fn (string $template, ResolveTemplate $resolveTemplate, array $context) => $resolveTemplate($template, $context),
-                'content' => fn (string $template, ResolveTemplate $resolveTemplate, array $context) => $resolveTemplate($template, $context, escapeValues: true),
-                'options' => function (array $options, ResolveTemplate $resolveTemplate, array $context) {
-                    return array_map(
-                        fn (array $option) => isset($option['label'])
-                            ? [...$option, 'label' => $resolveTemplate($option['label'], $context)]
-                            : $option,
-                        $options,
-                    );
+                'label' => function (array $config, Collection $templates, ResolveTemplate $resolveTemplate, array $context): array {
+                    $template = $templates->first();
+
+                    if ($template !== null) {
+                        $config['label'] = $resolveTemplate($template->template, $context);
+                    }
+
+                    return $config;
+                },
+                'content' => function (array $config, Collection $templates, ResolveTemplate $resolveTemplate, array $context): array {
+                    $template = $templates->first();
+
+                    if ($template !== null) {
+                        $config['content'] = $resolveTemplate($template->template, $context, escapeValues: true);
+                    }
+
+                    return $config;
+                },
+                'option_label' => function (array $config, Collection $templates, ResolveTemplate $resolveTemplate, array $context): array {
+                    if (! isset($config['options'])) {
+                        return $config;
+                    }
+
+                    $config['options'] = collect($config['options'])->values()->map(
+                        function (array $option, int $index) use ($templates, $resolveTemplate, $context) {
+                            $template = $templates->firstWhere('order', $index);
+
+                            return $template !== null
+                                ? [...$option, 'label' => $resolveTemplate($template->template, $context)]
+                                : $option;
+                        },
+                    )->all();
+
+                    return $config;
                 },
             ],
         ],

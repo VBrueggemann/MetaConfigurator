@@ -13,8 +13,7 @@ it('substitutes a pending, not-yet-committed answer into a later view label', fu
     $configurator = Configurator::factory()->create();
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $name = View::factory()->textInput()->childOf($group)->create();
-    $greeting = View::factory()->html('placeholder')->childOf($group)->create();
-    $greeting->update(['config' => ['content' => "Hello {{ answer('{$name->id}') }}!"]]);
+    $greeting = View::factory()->html("Hello {{ answer('{$name->id}') }}!")->childOf($group)->create();
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -28,8 +27,7 @@ it('substitutes a pending, not-yet-committed answer into a later view label', fu
 it('substitutes a calculation result into display content', function () {
     $configurator = Configurator::factory()->create();
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
-    $total = View::factory()->html('placeholder')->childOf($group)->create();
-    $total->update(['config' => ['content' => 'Sum: {{ calculation.total }}']]);
+    $total = View::factory()->html('Sum: {{ calculation.total }}')->childOf($group)->create();
 
     seedCalculations($configurator, ['total' => '10 + 5']);
 
@@ -46,10 +44,9 @@ it('falls back to the raw placeholder for an unknown or unanswered reference', f
     $configurator = Configurator::factory()->create();
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $unanswered = View::factory()->textInput()->childOf($group)->create();
-    $display = View::factory()->html('placeholder')->childOf($group)->create();
-    $display->update(['config' => [
-        'content' => "Unanswered: {{ answer('{$unanswered->id}') }} | Unknown: {{ answer('00000000-0000-0000-0000-000000000000') }}",
-    ]]);
+    $display = View::factory()->html(
+        "Unanswered: {{ answer('{$unanswered->id}') }} | Unknown: {{ answer('00000000-0000-0000-0000-000000000000') }}",
+    )->childOf($group)->create();
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -66,8 +63,7 @@ it('escapes a substituted value inside raw content but keeps authored html raw',
     $configurator = Configurator::factory()->create();
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $comment = View::factory()->textInput()->childOf($group)->create();
-    $display = View::factory()->html('placeholder')->childOf($group)->create();
-    $display->update(['config' => ['content' => "<strong>Hi {{ answer('{$comment->id}') }}</strong>"]]);
+    $display = View::factory()->html("<strong>Hi {{ answer('{$comment->id}') }}</strong>")->childOf($group)->create();
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -84,12 +80,11 @@ it('resolves another view label and its validation error via label() and validat
     $configurator = Configurator::factory()->create();
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $field = View::factory()->textInput('Shoe size')->childOf($group)->create();
-    Rule::factory()->validation('false')->create(['view_id' => $field->id, 'meta' => ['message' => 'bad value']]);
+    Rule::factory()->validation('false')->message('bad value')->create(['view_id' => $field->id]);
 
-    $summary = View::factory()->html('placeholder')->childOf($group)->create();
-    $summary->update(['config' => [
-        'content' => "Field label: {{ label('{$field->id}') }} | Rule says: {{ validationError('{$field->id}') }}",
-    ]]);
+    $summary = View::factory()->html(
+        "Field label: {{ label('{$field->id}') }} | Rule says: {{ validationError('{$field->id}') }}",
+    )->childOf($group)->create();
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -104,12 +99,9 @@ it('resolves validationError() as empty for a passing rule that gets pruned', fu
     $configurator = Configurator::factory()->create();
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $field = View::factory()->textInput('Shoe size')->childOf($group)->create();
-    Rule::factory()->validation('true')->create(['view_id' => $field->id, 'meta' => ['message' => 'should not appear']]);
+    Rule::factory()->validation('true')->message('should not appear')->create(['view_id' => $field->id]);
 
-    $summary = View::factory()->html('placeholder')->childOf($group)->create();
-    $summary->update(['config' => [
-        'content' => "Rule says: {{ validationError('{$field->id}') }}",
-    ]]);
+    $summary = View::factory()->html("Rule says: {{ validationError('{$field->id}') }}")->childOf($group)->create();
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -124,12 +116,9 @@ it('resolves validationError() as empty for a failing rule on a view that was ne
     $configurator = Configurator::factory()->create();
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $field = View::factory()->textInput('Shoe size')->childOf($group)->create();
-    Rule::factory()->validation('false')->create(['view_id' => $field->id, 'meta' => ['message' => 'should not appear']]);
+    Rule::factory()->validation('false')->message('should not appear')->create(['view_id' => $field->id]);
 
-    $summary = View::factory()->html('placeholder')->childOf($group)->create();
-    $summary->update(['config' => [
-        'content' => "Rule says: {{ validationError('{$field->id}') }}",
-    ]]);
+    $summary = View::factory()->html("Rule says: {{ validationError('{$field->id}') }}")->childOf($group)->create();
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -146,8 +135,8 @@ it('breaks a circular label reference instead of looping forever', function () {
     $a = View::factory()->group()->childOf($root)->create();
     $b = View::factory()->group()->childOf($root)->create();
 
-    $a->update(['config' => ['label' => "A -> {{ label('{$b->id}') }}"]]);
-    $b->update(['config' => ['label' => "B -> {{ label('{$a->id}') }}"]]);
+    template($a, 'label', "A -> {{ label('{$b->id}') }}");
+    template($b, 'label', "B -> {{ label('{$a->id}') }}");
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -162,9 +151,8 @@ it('templates the validation message with a pending answer at fetch time', funct
     $configurator = Configurator::factory()->create();
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $field = View::factory()->number('Quantity')->childOf($group)->create();
-    Rule::factory()->validation("answer('{$field->id}') >= 10")->create([
+    Rule::factory()->validation("answer('{$field->id}') >= 10")->message("{{ answer('{$field->id}') }} is too low")->create([
         'view_id' => $field->id,
-        'meta' => ['message' => "{{ answer('{$field->id}') }} is too low"],
     ]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
@@ -180,9 +168,8 @@ it('templates the validation message at commit time', function () {
     $configurator = Configurator::factory()->create();
     $group = View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $field = View::factory()->number('Quantity')->childOf($group)->create();
-    Rule::factory()->validation("answer('{$field->id}') >= 10")->create([
+    Rule::factory()->validation("answer('{$field->id}') >= 10")->message("{{ answer('{$field->id}') }} is too low")->create([
         'view_id' => $field->id,
-        'meta' => ['message' => "{{ answer('{$field->id}') }} is too low"],
     ]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);

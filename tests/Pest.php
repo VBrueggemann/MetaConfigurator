@@ -8,6 +8,7 @@ use App\Models\AnswerChunk;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\Rule;
+use App\Models\Template;
 use App\Models\View;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
@@ -82,6 +83,11 @@ function seedCalculations(Configurator $configurator, array $formulas): void
     $configurator->calculations()->createMany(
         collect($formulas)->map(fn (string $expression, string $name) => ['name' => $name, 'expression' => $expression])->values()->all()
     );
+}
+
+function template(View|Rule $templatable, string $key, string $text, ?int $order = null): Template
+{
+    return $templatable->templates()->create(['key' => $key, 'template' => $text, 'order' => $order]);
 }
 
 /**

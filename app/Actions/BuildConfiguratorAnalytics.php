@@ -20,7 +20,7 @@ final class BuildConfiguratorAnalytics
     public function __invoke(Configurator $configurator): ConfiguratorAnalytics
     {
         $chunksByConfiguration = ($this->getRelevantAnswerChunks)($configurator)
-            ->with(['anchorView', 'answers.view'])
+            ->with(['anchorView.templates', 'answers.view.templates'])
             ->orderBy('configuration_id')
             ->orderBy('sequence')
             ->get()

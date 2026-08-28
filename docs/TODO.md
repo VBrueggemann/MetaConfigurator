@@ -139,9 +139,49 @@ Found via re-profiling on 2026-08-27, after the five items above landed.
       added a `seedCalculations()` test helper in `tests/Pest.php` for the seed-then-assert pattern
       `ApplyCalculationTest`/`ResolveTemplateStringsTest` both need.
 
+- [x] **Extract a `Template` model for the four `{{ }}`-interpolated string fields — prerequisite for the cycle-detection item below.**
+      Fixed 2026-08-28: added `Template` (`app/Models/Template.php`, `templates` table — uuid pk, standard
+      `uuidMorphs('templatable')` columns, `key`, `template` text, nullable `order` int, timestamps), with the
+      inverse `morphMany` added to `View` and `Rule` only — not `Configurator`, which has no templatable field
+      today. `key` discriminates `label`/`content`/`option_label`/`message`; `order` is null for the first three
+      (one row per View/Rule) and holds the option's array index for `option_label` (a View can have several,
+      one per `config['options']` entry) — `config['options']` itself now stores everything *except* `label`
+      (`value`/`price`/`icon`/`subtitle` etc. stay put), with the label reconstructed back onto
+      `config['options'][$index]['label']` at resolve time.
+
+      Did **not** absorb `Rule.expression` or `Calculation.expression`, per the original plan — those stay raw
+      ExpressionLanguage code, untouched.
+
+      Every read/write site now goes through `Template`: `config/templating.php`'s `functions.View.label`
+      resolver and the `resolvable` list (Rule/message, View/label+content+option_label) source raw text from
+      `->templates` (grouped by `key`) but still write the *resolved* output back onto the same in-memory
+      `rule.meta['message']`/`view.config['label']`/`['content']`/`['options'][].label` keys as before — this
+      preserves `ResolveTemplateStrings`'s existing mutation contract (mutate in memory, never persist) and
+      means `resources/views/livewire/play-configurator/**` needed zero changes, since Blade already only ever
+      read those same keys off the pipeline-resolved tree. `CollectAndBatchFetchExternalReferences::templatableStrings()`
+      now scans `$view->templates`/`$rule->templates` instead of the old JSON locations. `ApplyFlow`'s blanket
+      scope-tree eager-load gained `bloodline.templates`/`bloodline.rules.templates` (same reason `bloodline.rules`
+      was already there) so the scan stays N+1-free; `PipelineQueryCountTest` confirms no regression.
+
+      Two read paths outside the main pipeline also needed the relation: `ApplyBreadcrumbs` (breadcrumb view
+      labels) and `BuildConfiguratorAnalytics`/`ConfiguratorAnalyticsPage::formatValue()` (step/answer/transition
+      labels and option-value-to-label lookups for the analytics page) — both now eager-load `templates` and
+      the two `configurator-analytics.blade.php`/`play-configurator.blade.php` breadcrumb spots read the label
+      off `->templates->firstWhere('key', 'label')?->template` instead of `->config['label']`, since those views
+      are fetched outside `ResolveTemplateStrings`'s scope-tree walk and never get a resolved `config['label']`
+      written back.
+
+      `ViewFactory`'s `label`/`content`/`options` convenience params and a new `RuleFactory::message()` state
+      now create `Template` rows via `afterCreating()` instead of writing into `config`/`meta` directly, so
+      every seeder and test that already used those factory params kept working unchanged; only call sites that
+      set `config`/`meta` raw (a few `->update(['config' => ['content' => ...]])` calls, inline
+      `'meta' => ['message' => ...]` arrays) needed converting across all 5 seeders and the pipeline test suite.
+      A new `template()` Pest helper (`tests/Pest.php`) mirrors `seedCalculations()` for the remaining
+      hand-written cases (e.g. the circular-label-reference test).
+
 ## Expression evaluation (`app/Actions/Pipeline/ApplyCalculation.php`, `app/Actions/Pipeline/ResolveModelFunction.php`)
 
-- [ ] **Move cycle detection out of the per-request evaluation pipeline into a one-time "prebake" step on the configurator.**
+- [ ] **Move cycle detection out of the per-request evaluation pipeline into a one-time bake step on the configurator.**
       Two independent runtime guards exist today: `ApplyCalculation::topologicalOrder` DFS-checks
       `calculation.<name>` formulas for circular dependencies on every evaluation (throws
       `RuntimeException`, tested in `tests/Feature/Pipeline/ApplyCalculationTest.php:65-78`), and
@@ -150,14 +190,39 @@ Found via re-profiling on 2026-08-27, after the five items above landed.
       `tests/Feature/Pipeline/ResolveTemplateStringsTest.php:144+`). Both re-derive the same answer (is this
       configurator's formula/reference graph acyclic?) on every single request, even though the graph only
       changes when the configurator's rules/formulas/labels are edited.
-      Reason to remove: the runtime cost and code complexity of re-checking on every evaluation isn't wanted —
-      cycle-freedom should instead be established once, in a "prebake" step that runs when a configurator is
-      saved/published, not on the hot path. Open question to resolve before removing the runtime guards:
-      where the prebake step lives, what it validates (formula graph only, or also the templating-function
-      graph `ResolveModelFunction` currently guards), and what happens to a configurator that fails prebake
-      (reject the save, or flag and allow with a warning). Until that lands, removing the runtime guards
-      outright would turn a circular formula/reference into an infinite loop / stack overflow at evaluation
-      time instead of a caught error.
+
+      Design settled via grilling on 2026-08-28 (depends on the `Template` model item above landing first, since
+      this reads `Template` + `Calculation` rather than walking `View.config`/`Rule.meta` JSON):
+
+      - **Drop both runtime guards, not just the calculation one.** Checked whether removing
+        `ResolveModelFunction`'s guard is safe given `CollectAndBatchFetchExternalReferences::scanReferences`'s
+        regex only matches a quoted-literal argument (`/\b(fn)\(\s*['"]([^'"]+)['"]\s*\)/`) — a
+        dynamically-computed id (`answer(otherAnswer())`) is already invisible to that scan today, so it never
+        lands in `modelsById`, so `ResolveModelFunction` already throws "Unknown reference" before a cycle could
+        form. Every cycle that can actually occur through `answer()`/`label()`/`validationError()` is built from
+        literal ids, which a static scan finds completely — no blind spot, safe to remove both guards.
+
+      - **One boolean on `Configurator`** (e.g. `graphs_acyclic`), covering both graphs — the `Calculation`
+        dependency graph and the `Template`/`Rule` literal-id reference graph — not one flag per graph. A single
+        flag stays simpler and loses nothing for debugging, since the exception thrown on a real cycle already
+        names the offending key/id (same as today, just relocated to bake time).
+
+      - **Defaults to `false`.** There's no configurator-builder/editor UI yet (only the 5 seeders create
+        `Configurator`/`Template`/`Calculation` rows), so nothing bakes the graph at "save" time today. Instead: a
+        new early pipeline stage checks the flag; if `false`, it builds both graphs, throws the same
+        `RuntimeException` as today if either is cyclic, otherwise persists `graphs_acyclic = true` on the
+        `Configurator` and continues. If `true`, it's a single already-loaded-attribute check, no graph walk. So
+        today the first evaluation of a freshly-seeded configurator pays for one bake; every request after is
+        O(1). Once a real editor exists, its save action becomes responsible for baking eagerly at save time
+        instead — a configurator then never reaches evaluation un-baked at all, and this stage's `false` branch
+        becomes dead code for anything saved through the editor.
+
+      - **On a cycle: throw**, same as today (`RuntimeException`) — not flag-and-allow. Every existing test
+        already expects a hard failure on a cyclic graph, so this is the smallest possible behavioral diff from
+        today. Revisit flag-and-allow (degrading via `ApplyCalculation::resolve`'s existing
+        `catch (Throwable)`-and-fallback path) or failing at the `PlayConfigurator` UI boundary instead, once
+        there's an actual editor UI where surfacing "this configurator is broken" to its author is a reachable
+        moment, rather than a dev-only seeder mistake.
 
 - [ ] **Audit every pipeline stage for prebake potential, not just the two cycle-detection guards above.**
       `FetchConfigurationState` and `CommitConfigurationAnswers` both run the same eight/ten-stage pipeline on

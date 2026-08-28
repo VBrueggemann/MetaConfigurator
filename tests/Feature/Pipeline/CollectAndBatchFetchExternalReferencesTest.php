@@ -92,10 +92,7 @@ it('batch-fetches a view referenced by label() outside the current scope', funct
     $stepOne = View::factory()->group()->childOf($root)->create(['order' => 0]);
     $outside = View::factory()->textInput('Outside label')->childOf($stepOne)->create(['order' => 0]);
     $stepTwo = View::factory()->group()->childOf($root)->create(['order' => 1]);
-    $target = View::factory()->textInput()->childOf($stepTwo)->create([
-        'order' => 0,
-        'config' => ['label' => "{{ label('{$outside->id}') }}", 'widget' => 'text'],
-    ]);
+    $target = View::factory()->textInput("{{ label('{$outside->id}') }}")->childOf($stepTwo)->create(['order' => 0]);
     $configurator->update(['scope_depth' => 1]);
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
@@ -103,7 +100,7 @@ it('batch-fetches a view referenced by label() outside the current scope', funct
 
     $evaluation = collectExternalReferences($configuration);
 
-    expect($evaluation->context['modelsById'][View::class][$outside->id]->config['label'])->toBe('Outside label');
+    expect($evaluation->context['modelsById'][View::class][$outside->id]->templates->firstWhere('key', 'label')->template)->toBe('Outside label');
 });
 
 it('loads descendants for an in-scope group referenced by answer() without an external query', function () {

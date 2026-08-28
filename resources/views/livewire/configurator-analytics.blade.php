@@ -20,7 +20,7 @@
             <div class="rounded-lg border border-gray-200 p-5">
                 <div class="mb-4 flex items-baseline justify-between gap-4">
                     <h2 class="text-base font-semibold text-gray-900">
-                        {{ $anchor->view->config['label'] ?? 'Step '.$loop->iteration }}
+                        {{ $anchor->view->templates->firstWhere('key', 'label')?->template ?? 'Step '.$loop->iteration }}
                     </h2>
                     <span class="shrink-0 text-sm text-gray-600">
                         {{ $anchor->visitCount }} configuration{{ $anchor->visitCount === 1 ? '' : 's' }} reached this step
@@ -32,7 +32,7 @@
                         @foreach ($anchor->answers as $fieldAnswers)
                             <div>
                                 <h3 class="mb-2 text-sm font-medium text-gray-700">
-                                    {{ $fieldAnswers['view']->config['label'] ?? 'Answer' }}
+                                    {{ $fieldAnswers['view']->templates->firstWhere('key', 'label')?->template ?? 'Answer' }}
                                 </h3>
                                 <ul class="space-y-1.5">
                                     @foreach ($fieldAnswers['values'] as $valueStat)
@@ -61,7 +61,7 @@
                             <li class="flex items-center gap-2 text-sm text-gray-700">
                                 <span aria-hidden="true">&rarr;</span>
                                 <span class="grow">
-                                    {{ $transition['view'] ? ($transition['view']->config['label'] ?? 'Untitled step') : 'Finished the configurator' }}
+                                    {{ $transition['view'] ? ($transition['view']->templates->firstWhere('key', 'label')?->template ?? 'Untitled step') : 'Finished the configurator' }}
                                 </span>
                                 <span class="shrink-0 text-gray-600">
                                     {{ $transition['count'] }} ({{ $transition['percentage'] }}%)

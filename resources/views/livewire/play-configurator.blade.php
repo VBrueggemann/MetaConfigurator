@@ -9,7 +9,7 @@
                     wire:click="goToView('{{ $breadcrumb->id }}')"
                     class="underline hover:text-blue-600"
                 >
-                    {{ $breadcrumb->config['label'] ?? 'Step '.$loop->iteration }}
+                    {{ $breadcrumb->templates->firstWhere('key', 'label')?->template ?? 'Step '.$loop->iteration }}
                 </button>
                 @unless ($loop->last)
                     <span aria-hidden="true">&rsaquo;</span>

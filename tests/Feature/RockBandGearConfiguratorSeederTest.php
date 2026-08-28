@@ -22,7 +22,7 @@ beforeEach(function () {
     $shell = View::where('parent_id', $root->id)->first();
     $allQuestions = View::where('parent_id', $shell->id)->first();
 
-    $this->steps = View::where('parent_id', $allQuestions->id)->orderBy('order')->get();
+    $this->steps = View::where('parent_id', $allQuestions->id)->orderBy('order')->with('templates')->get();
     $this->intro = $this->steps[0];
 
     $picker = View::where('parent_id', $this->intro->id)->orderBy('order')->get()[1];
@@ -49,7 +49,7 @@ function rbgCurrentStepLabel(Collection $steps, ConfigurationEvaluation $evaluat
     $scopeIds = collect($evaluation->componentContexts['scope'])->toList()->pluck('id');
     $step = $steps->first(fn (View $step) => $scopeIds->contains($step->id));
 
-    return $step?->config['label'] ?? null;
+    return $step?->templates->firstWhere('key', 'label')?->template;
 }
 
 it('seeds thirteen top-level steps', function () {

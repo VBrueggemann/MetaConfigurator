@@ -41,4 +41,9 @@ class RuleFactory extends Factory
     {
         return $this->state(fn () => ['component' => RuleComponent::Flow, 'expression' => $expression, 'meta' => ['view_id' => $viewId]]);
     }
+
+    public function message(string $text): static
+    {
+        return $this->afterCreating(fn (Rule $rule) => $rule->templates()->create(['key' => 'message', 'template' => $text]));
+    }
 }

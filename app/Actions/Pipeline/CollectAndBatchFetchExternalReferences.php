@@ -79,10 +79,8 @@ final class CollectAndBatchFetchExternalReferences
     private function templatableStrings(View $view): array
     {
         return [
-            $view->config['label'] ?? '',
-            $view->config['content'] ?? '',
-            ...collect($view->config['options'] ?? [])->pluck('label')->filter()->all(),
-            ...$view->rules->flatMap(fn (Rule $rule): array => [$rule->expression, $rule->meta['message'] ?? ''])->all(),
+            ...$view->templates->pluck('template')->all(),
+            ...$view->rules->flatMap(fn (Rule $rule): array => [$rule->expression, ...$rule->templates->pluck('template')->all()])->all(),
         ];
     }
 

@@ -12,7 +12,7 @@ final class ApplyBreadcrumbs
     {
         $chunks = $evaluation->configuration->relevantAnswerChunks;
 
-        $anchorViewsById = View::query()->whereIn('id', $chunks->pluck('anchor_view_id'))->get()->keyBy('id');
+        $anchorViewsById = View::query()->whereIn('id', $chunks->pluck('anchor_view_id'))->with('templates')->get()->keyBy('id');
 
         $evaluation->componentContexts['breadcrumbs'] = $chunks
             ->map(fn ($chunk) => $anchorViewsById->get($chunk->anchor_view_id))

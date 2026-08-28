@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Rule extends Model
 {
@@ -28,5 +29,10 @@ class Rule extends Model
     public function view(): BelongsTo
     {
         return $this->belongsTo(View::class);
+    }
+
+    public function templates(): MorphMany
+    {
+        return $this->morphMany(Template::class, 'templatable');
     }
 }

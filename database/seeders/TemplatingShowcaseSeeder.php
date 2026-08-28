@@ -29,33 +29,29 @@ class TemplatingShowcaseSeeder extends Seeder
             ['name' => 'lastNameRemaining', 'expression' => "{$maxLength} - calculation.lastNameLength"],
         ]);
 
-        Rule::factory()->validation("calculation.firstNameLength <= {$maxLength}")->create([
-            'view_id' => $firstName->id,
-            'meta' => ['message' => "'{{ answer('{$firstName->id}') }}' is {{ calculation.firstNameLength - {$maxLength} }} characters over the limit"],
-        ]);
+        Rule::factory()->validation("calculation.firstNameLength <= {$maxLength}")
+            ->message("'{{ answer('{$firstName->id}') }}' is {{ calculation.firstNameLength - {$maxLength} }} characters over the limit")
+            ->create(['view_id' => $firstName->id]);
 
-        Rule::factory()->validation("calculation.lastNameLength <= {$maxLength}")->create([
-            'view_id' => $lastName->id,
-            'meta' => ['message' => "'{{ answer('{$lastName->id}') }}' is {{ calculation.lastNameLength - {$maxLength} }} characters over the limit"],
-        ]);
+        Rule::factory()->validation("calculation.lastNameLength <= {$maxLength}")
+            ->message("'{{ answer('{$lastName->id}') }}' is {{ calculation.lastNameLength - {$maxLength} }} characters over the limit")
+            ->create(['view_id' => $lastName->id]);
 
-        $firstNameInfo = View::factory()->html('placeholder')->childOf($root)->create(['order' => 2]);
-        $firstNameInfo->update(['config' => ['content' => implode('<br>', [
+        View::factory()->html(implode('<br>', [
             "Question: {{ label('{$firstName->id}') }}",
             "Answer: {{ answer('{$firstName->id}') }}",
             'Character count: {{ calculation.firstNameLength }}',
             'Characters left before the limit triggers: {{ calculation.firstNameRemaining }}',
             "Validation message preview: {{ validationError('{$firstName->id}') }}",
-        ])]]);
+        ]))->childOf($root)->create(['order' => 2]);
 
-        $lastNameInfo = View::factory()->html('placeholder')->childOf($root)->create(['order' => 3]);
-        $lastNameInfo->update(['config' => ['content' => implode('<br>', [
+        View::factory()->html(implode('<br>', [
             "Question: {{ label('{$lastName->id}') }}",
             "Answer: {{ answer('{$lastName->id}') }}",
             'Character count: {{ calculation.lastNameLength }}',
             'Characters left before the limit triggers: {{ calculation.lastNameRemaining }}',
             "Validation message preview: {{ validationError('{$lastName->id}') }}",
-        ])]]);
+        ]))->childOf($root)->create(['order' => 3]);
 
         $this->command?->info('   Configurator: '.route('configurators.play', ['configurator' => $configurator]));
     }
