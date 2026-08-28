@@ -228,21 +228,66 @@ Found via re-profiling on 2026-08-27, after the five items above landed.
       the one-time bake cost and the second didn't, making the two counts spuriously unequal. Not a real scaling
       regression, just that test's setup needing to reflect steady-state (post-bake) cost rather than first-ever-request cost.
 
-- [ ] **Audit every pipeline stage for prebake potential, not just the two cycle-detection guards above.**
-      `FetchConfigurationState` and `CommitConfigurationAnswers` both run the same eight/ten-stage pipeline on
-      every request (`GuardAnchorOverride`, `ApplyFlow`, `CollectAndBatchFetchExternalReferences`,
-      `ApplyCalculation`, `ApplyVisibility`, `ApplyValidation`, `ResolveTemplateStrings`, `ApplyBreadcrumbs`
-      and, for commits, `GuardValidationFailure`, `SupersedeAnswerChunks`, `CommitAnswers` — all in
-      `app/Actions/Pipeline/`). The cycle-detection item above was found by looking for one specific pattern
-      (repeated-but-static graph checks); no one has gone stage by stage asking the general question. For each
-      stage, work out: what scope it actually needs (whole tree vs. current branch vs. single view — c.f. the
-      `ApplyFlow`/`CollectAndBatchFetchExternalReferences` fixes in the "Pipeline performance" section above,
-      which narrowed scope for two stages already), which of its calls are resource-heavy (DB queries, full
-      collection scans over the tree), how much of its logic is inherent per-request work (depends on the
-      answers given so far) vs. static per-configurator work that only changes when the configurator is
-      edited, and — for the static part — whether it's a prebake candidate. Output should be one write-up per
-      stage (or a "nothing to do here" note) added to this file, not a single blanket rewrite; some stages
-      (e.g. anything reading `relevantAnswers`) are inherently per-request and won't have a prebake half.
+- [x] **Audit every pipeline stage for prebake potential, not just the two cycle-detection guards above.**
+      Audited 2026-08-28, no code changes — every remaining stage's per-request cost is either already a
+      single batched query, pure in-memory computation over already-loaded data, an actual write of new
+      state, or inherently answer-dependent (can't be known ahead of the current request's `relevantAnswers`/
+      `pendingAnswers`). One write-up per stage, in pipeline order:
+
+      - **`GuardAnchorOverride`** — pure in-memory `contains()` check against the already-loaded
+        `relevantAnswerChunks` relation, zero queries. What it checks (does `anchorViewId` name an existing
+        relevant chunk anchor *for this Configuration*) is per-session state, not a per-configurator-static
+        fact — nothing to bake.
+      - **`ApplyFlow`** — two parts. The whole-tree `$rootView->descendantsAndSelf()->depthFirst()->get()` is
+        structurally static per configurator (only changes when the configurator itself is edited), but
+        `pipeline.md`'s "`path`/`depth` are CTE-only, never materialized columns" constraint means there is no
+        way to serve a depth-first-ordered view list without going through that recursive CTE — baking it
+        would mean caching the query *result*, which still needs a cache-invalidation-on-edit story most other
+        bakes here don't (they invalidate via a boolean/json column set once and never touched again outside a
+        migration). Not picked up here; the real prebake-enabling change would be materializing `path`/`depth`
+        columns, which is a schema change out of scope for an audit. The flow-rule scan itself
+        (`findFlowTarget`) is inherently per-request — which rule fires depends on `answeredViewIds`, i.e. the
+        answers given so far — and is already chunked/short-circuiting (see the still-open "Chunked flow-rule
+        scan" item above).
+      - **`CollectAndBatchFetchExternalReferences`** — already investigated and closed above (the
+        "Rework what goes into the `ExpressionLanguage` evaluation context" item, 2026-08-28): the regex scan
+        runs over already-loaded, already-small in-scope text, and the external-view fetch is already one
+        batched `whereIn()`. Nothing new found here.
+      - **`ApplyCalculation`** — cycle-freedom and topological order are already baked
+        (`BakeConfiguratorGraphs`, above). The remaining cost, `evaluate()` per formula against the current
+        `calculation` context, is answer-dependent by construction — a formula's *result* changes every time
+        an upstream answer changes, so there's no static remainder left to bake. A calculation-result cache
+        was considered and rejected in the same investigated item above (net loss given the parse cache already
+        makes `evaluate()` a cheap in-process tree-walk).
+      - **`ApplyVisibility`** — Visibility rule expressions read `answer(id)`, so a view's visibility is
+        answer-dependent by construction; there's no configurator-static visibility fact to bake. Already scoped
+        to the current bloodline only (not a full-tree query) per the "`ApplyVisibility` computes from the scope
+        tree" note in `pipeline.md`.
+      - **`ApplyValidation`** — same shape as Visibility: which Validation rules pass/fail reads `answer(id)`,
+        and which views are "pending" comes from this request's `pendingAnswers`. Both are inherently
+        per-request; nothing static to extract.
+      - **`ResolveTemplateStrings`/`ResolveTemplate`** — every resolvable field is a `{{ }}` template whose
+        only registered functions (`answer`/`label`/`validationError`) are answer- or validation-state-
+        dependent, so the resolved *string* is inherently per-request. The one static, repeated-across-requests
+        cost here — parsing the same expression AST — is already cached (the Redis + in-request `ArrayAdapter`
+        chain from the "no persistent parse cache" / "no in-request memoization" items above). No further static
+        remainder.
+      - **`ApplyBreadcrumbs`** — one `View::whereIn($chunks->pluck('anchor_view_id'))->with('templates')->get()`
+        per read-pipeline request. The *id set* (which views are breadcrumb anchors) is inherently per-Configuration
+        state that grows over the session, not a per-configurator-static fact, so there's nothing to bake there.
+        The View rows/templates it fetches are configurator-static, but the set is small (one per step actually
+        visited so far) and already a single batched query — same shape already accepted for the external-view
+        fetch in `CollectAndBatchFetchExternalReferences`. Not worth restructuring for a query this cheap.
+      - **`GuardValidationFailure`** (commit only) — pure in-memory scan of the already-loaded
+        `componentContexts['scope']`, zero queries.
+      - **`SupersedeAnswerChunks`**/**`CommitAnswers`** (commit only) — both are writes of this request's actual
+        new state (superseding old chunks, inserting this request's answers). A write can't be precomputed ahead
+        of the request that produces the data it writes — not applicable to prebaking at all, by definition.
+
+      Net finding: the two cycle-detection/topological-order bakes already landed were the only genuinely
+      static, repeated-per-request, per-configurator facts in this pipeline. Everything else is either already
+      a single batched query/in-memory op, or is answer-dependent and therefore has no prebake half — consistent
+      with how the item was scoped going in.
 
 - [x] **Rework what goes into the `ExpressionLanguage` evaluation context — always-included vs. cheap-to-include vs. lazy, plus a prebake-backed cache.**
       Investigated via grilling on 2026-08-28, decided against — closing without code changes. This item was
