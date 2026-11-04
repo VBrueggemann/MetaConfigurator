@@ -141,7 +141,7 @@ it('throws on a circular label reference instead of looping forever', function (
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
     expect(fn () => app(FetchConfigurationState::class)($configuration))
-        ->toThrow(RuntimeException::class, "Circular label reference involving view '{$a->id}'.");
+        ->toThrow(RuntimeException::class, "Circular dependency involving '{$a->id}' of type 'App\\Models\\View'.");
 });
 
 it('templates the validation message with a pending answer at fetch time', function () {

@@ -1,5 +1,7 @@
 # String templating via `{{ }}` substitution and expression functions
 
+> **Superseded detail:** `message(id)` was later renamed `validationError(id)`, and the classes named below (`BuildTemplateFieldContext`, `ResolveTemplateField`, `BuildAnswerContext`) were renamed/restructured into `CollectAndBatchFetchExternalReferences`/`ResolveModelFunction`/pipeline `context` as the mechanism grew to cover more than templating (see `.ai/rules/pipeline.md`). The four templatable fields also moved from raw `config`/`meta` strings into a separate polymorphic `Template` model (see `.ai/rules/models.md`) rather than being resolved in place. The reasoning here — substitution-only templates, UUID addressing, a configurable function/field registry, raw-text fallback on an unresolved reference — still holds.
+
 Content authors write `View.config['label']`/`config['content']`/`config['options'][].label` and `Rule.meta['message']` as static strings. There was no way for a later step to echo an earlier answer, or for a Display step to surface an already-computed `Calculation` result — every such need had to be hand-copied by whoever authored the seeder, with no way to keep it in sync as answers changed.
 
 Three questions had to be settled before this could be built: how a template addresses an answer or another item, how much expressive power a template gets, and what happens when a reference can't be resolved.

@@ -17,13 +17,11 @@ class Configurator extends Model
         'name',
         'slug',
         'scope_depth',
-        'graphs_acyclic',
-        'calculation_order',
+        'is_baked',
     ];
 
     protected $casts = [
-        'graphs_acyclic' => 'bool',
-        'calculation_order' => 'array',
+        'is_baked' => 'bool',
     ];
 
     protected static function booted(): void

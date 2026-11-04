@@ -15,6 +15,7 @@ class Calculation extends Model
         'configurator_id',
         'name',
         'expression',
+        'order',
     ];
 
     public function configurator(): BelongsTo

@@ -22,7 +22,11 @@ final class ApplyCalculation
 
         /** @var array<string, string> $formulas */
         $formulas = $evaluation->context['calculationFormulas'];
-        $order = $evaluation->configuration->configurator->calculation_order;
+        $order = $evaluation->configuration->configurator->calculations
+            ->sortBy('order')
+            ->pluck('name')
+            ->values()
+            ->all();
 
         $evaluation->context['calculation'] = (object) $this->resolve($formulas, $order, $evaluation->context);
 

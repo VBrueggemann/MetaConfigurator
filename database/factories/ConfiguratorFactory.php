@@ -19,7 +19,7 @@ class ConfiguratorFactory extends Factory
     {
         return [
             'name' => fake()->words(3, true),
-            'graphs_acyclic' => false,
+            'is_baked' => false,
         ];
     }
 }

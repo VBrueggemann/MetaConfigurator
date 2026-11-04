@@ -1,32 +1,32 @@
 <?php
 
 use App\Actions\DTO\ConfigurationEvaluation;
-use App\Actions\Pipeline\BakeConfiguratorGraphs;
+use App\Actions\Pipeline\EnsureConfiguratorBaked;
 use App\Models\Configuration;
 use App\Models\Configurator;
 use App\Models\View;
 use Illuminate\Support\Facades\DB;
 
-function bakeGraphs(Configuration $configuration): ConfigurationEvaluation
+function ensureBaked(Configuration $configuration): ConfigurationEvaluation
 {
     $evaluation = new ConfigurationEvaluation($configuration, []);
     $configuration->loadMissing(['configurator.rootView', 'configurator.calculations']);
 
-    app(BakeConfiguratorGraphs::class)($evaluation, fn (ConfigurationEvaluation $evaluation) => $evaluation);
+    app(EnsureConfiguratorBaked::class)($evaluation, fn (ConfigurationEvaluation $evaluation) => $evaluation);
 
     return $evaluation;
 }
 
-it('bakes graphs_acyclic to true on a configurator with no cycles', function () {
+it('marks a configurator baked when there are no cycles', function () {
     $configurator = Configurator::factory()->create();
     View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
-    expect($configurator->graphs_acyclic)->toBeFalse();
+    expect($configurator->is_baked)->toBeFalse();
 
-    bakeGraphs($configuration);
+    ensureBaked($configuration);
 
-    expect($configurator->refresh()->graphs_acyclic)->toBeTrue();
+    expect($configurator->refresh()->is_baked)->toBeTrue();
 });
 
 it('bakes the calculation topological order alongside acyclicity', function () {
@@ -40,13 +40,14 @@ it('bakes the calculation topological order alongside acyclicity', function () {
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
-    bakeGraphs($configuration);
+    ensureBaked($configuration);
 
-    expect($configurator->refresh()->calculation_order)->toBe(['subtotal', 'total']);
+    expect($configurator->refresh()->calculations->sortBy('order')->pluck('name')->values()->all())
+        ->toBe(['subtotal', 'total']);
 });
 
-it('does not re-bake once graphs_acyclic is already true', function () {
-    $configurator = Configurator::factory()->create(['graphs_acyclic' => true]);
+it('does not re-bake once already baked', function () {
+    $configurator = Configurator::factory()->create(['is_baked' => true]);
     View::factory()->group()->create(['configurator_id' => $configurator->id]);
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
@@ -54,7 +55,7 @@ it('does not re-bake once graphs_acyclic is already true', function () {
     $configuration->loadMissing(['configurator.rootView', 'configurator.calculations']);
 
     DB::enableQueryLog();
-    app(BakeConfiguratorGraphs::class)($evaluation, fn (ConfigurationEvaluation $evaluation) => $evaluation);
+    app(EnsureConfiguratorBaked::class)($evaluation, fn (ConfigurationEvaluation $evaluation) => $evaluation);
     $queries = collect(DB::getQueryLog());
     DB::disableQueryLog();
 
@@ -72,10 +73,10 @@ it('throws a clear error on a circular calculation dependency', function () {
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
-    expect(fn () => bakeGraphs($configuration))
-        ->toThrow(RuntimeException::class, "Circular calculation dependency involving 'a'.");
+    expect(fn () => ensureBaked($configuration))
+        ->toThrow(RuntimeException::class, "Circular dependency involving 'a' of type 'App\\Models\\Calculation'.");
 
-    expect($configurator->refresh()->graphs_acyclic)->toBeFalse();
+    expect($configurator->refresh()->is_baked)->toBeFalse();
 });
 
 it('throws a clear error on a circular label reference', function () {
@@ -89,6 +90,6 @@ it('throws a clear error on a circular label reference', function () {
 
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
-    expect(fn () => bakeGraphs($configuration))
-        ->toThrow(RuntimeException::class, "Circular label reference involving view '{$a->id}'.");
+    expect(fn () => ensureBaked($configuration))
+        ->toThrow(RuntimeException::class, "Circular dependency involving '{$a->id}' of type 'App\\Models\\View'.");
 });

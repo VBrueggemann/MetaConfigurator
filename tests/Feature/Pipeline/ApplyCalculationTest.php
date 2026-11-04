@@ -73,7 +73,7 @@ it('throws a clear error on a circular formula dependency', function () {
     $configuration = Configuration::factory()->create(['configurator_id' => $configurator->id]);
 
     expect(fn () => app(FetchConfigurationState::class)($configuration))
-        ->toThrow(RuntimeException::class, "Circular calculation dependency involving 'a'.");
+        ->toThrow(RuntimeException::class, "Circular dependency involving 'a' of type 'App\\Models\\Calculation'.");
 });
 
 it('falls back to 0 instead of crashing when a formula fails to evaluate', function () {

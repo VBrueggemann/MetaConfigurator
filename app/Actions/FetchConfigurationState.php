@@ -9,8 +9,8 @@ use App\Actions\Pipeline\ApplyCalculation;
 use App\Actions\Pipeline\ApplyFlow;
 use App\Actions\Pipeline\ApplyValidation;
 use App\Actions\Pipeline\ApplyVisibility;
-use App\Actions\Pipeline\BakeConfiguratorGraphs;
 use App\Actions\Pipeline\CollectAndBatchFetchExternalReferences;
+use App\Actions\Pipeline\EnsureConfiguratorBaked;
 use App\Actions\Pipeline\GuardAnchorOverride;
 use App\Actions\Pipeline\ResolveTemplateStrings;
 use App\Models\Configuration;
@@ -35,7 +35,7 @@ final class FetchConfigurationState
         return app(Pipeline::class)
             ->send($evaluation)
             ->through([
-                BakeConfiguratorGraphs::class,
+                EnsureConfiguratorBaked::class,
                 GuardAnchorOverride::class,
                 ApplyFlow::class,
                 CollectAndBatchFetchExternalReferences::class,
